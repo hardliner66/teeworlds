@@ -16,7 +16,6 @@
 #include "player.h"
 
 #include <ctime>
-#include <atltime.h>
 
 #define MAX_MUTES 35
 #define FCATCH_VERSION "0.4.8 BETA"
