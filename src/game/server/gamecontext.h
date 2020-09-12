@@ -15,6 +15,12 @@
 #include "gameworld.h"
 #include "player.h"
 
+#include <ctime>
+#include <atltime.h>
+
+#define MAX_MUTES 35
+#define ZCATCH_VERSION "0.4.8 BETA"
+
 /*
 	Tick
 		Game Context (CGameContext::tick)
@@ -44,6 +50,8 @@ class CGameContext : public IGameServer
 	CCollision m_Collision;
 	CNetObjHandler m_NetObjHandler;
 	CTuningParams m_Tuning;
+  
+  time_t m_LastMapVote;
 
 	static void ConTuneParam(IConsole::IResult *pResult, void *pUserData);
 	static void ConTuneReset(IConsole::IResult *pResult, void *pUserData);
@@ -64,6 +72,11 @@ class CGameContext : public IGameServer
 	static void ConClearVotes(IConsole::IResult *pResult, void *pUserData);
 	static void ConVote(IConsole::IResult *pResult, void *pUserData);
 	static void ConchainSpecialMotdupdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
+	
+	static void ConMute(IConsole::IResult *pResult, void *pUserData);
+	static void ConUnmuteID(IConsole::IResult *pResult, void *pUserData);
+	static void ConUnmuteIP(IConsole::IResult *pResult, void *pUserData);
+	static void ConMutes(IConsole::IResult *pResult, void *pUserData);
 
 	CGameContext(int Resetting);
 	void Construct(int Resetting);
@@ -92,7 +105,7 @@ public:
 	int m_LockTeams;
 
 	// voting
-	void StartVote(const char *pDesc, const char *pCommand, const char *pReason);
+	void StartVote(const char *pDesc, const char *pCommand, const char *pReason,CPlayer *pPlayer);
 	void EndVote();
 	void SendVoteSet(int ClientID);
 	void SendVoteStatus(int ClientID, int Total, int Yes, int No);
@@ -134,6 +147,19 @@ public:
 		CHAT_RED=0,
 		CHAT_BLUE=1
 	};
+	
+	struct CMutes
+	{
+		char m_aIP[NETADDR_MAXSTRSIZE];
+		int m_Expires;
+	}; 
+	CMutes m_aMutes[MAX_MUTES];
+	// helper functions
+	void AddMute(const char* pIP, int Secs);
+	void AddMute(int ClientID, int Secs, bool Auto = false);
+	int Muted(const char *pIP);
+	int Muted(int ClientID);
+	void CleanMutes();
 
 	// network
 	void SendChatTarget(int To, const char *pText);
