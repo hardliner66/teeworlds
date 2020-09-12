@@ -9,7 +9,6 @@
 #include "gamecontroller.h"
 #include "gamecontext.h"
 
-
 IGameController::IGameController(class CGameContext *pGameServer)
 {
 	m_pGameServer = pGameServer;
@@ -762,4 +761,10 @@ int IGameController::ClampTeam(int Team)
 	if(IsTeamplay())
 		return Team&1;
 	return 0;
+}
+
+
+int IGameController::RoundStartTick()
+{
+	return m_RoundStartTick;
 }

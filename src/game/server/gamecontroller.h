@@ -12,13 +12,13 @@
 */
 class IGameController
 {
+protected:
 	vec2 m_aaSpawnPoints[3][64];
 	int m_aNumSpawnPoints[3];
 
 	class CGameContext *m_pGameServer;
 	class IServer *m_pServer;
 
-protected:
 	CGameContext *GameServer() const { return m_pGameServer; }
 	IServer *Server() const { return m_pServer; }
 
@@ -64,6 +64,8 @@ protected:
 public:
 	const char *m_pGameType;
 
+	int RoundStartTick();
+
 	bool IsTeamplay() const;
 	bool IsGameOver() const { return m_GameOverTick != -1; }
 
@@ -75,8 +77,8 @@ public:
 	void DoWarmup(int Seconds);
 	void TogglePause();
 
-	void StartRound();
-	void EndRound();
+	virtual void StartRound();
+	virtual void EndRound();
 	void ChangeMap(const char *pToMap);
 
 	bool IsFriendlyFire(int ClientID1, int ClientID2);
@@ -140,7 +142,7 @@ public:
 	virtual int GetAutoTeam(int NotThisID);
 	virtual bool CanJoinTeam(int Team, int NotThisID);
 	bool CheckTeamBalance();
-	bool CanChangeTeam(CPlayer *pPplayer, int JoinTeam);
+	virtual bool CanChangeTeam(CPlayer *pPlayer, int JoinTeam);
 	int ClampTeam(int Team);
 
 	virtual void PostReset();
