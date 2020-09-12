@@ -7,7 +7,7 @@
 #include <game/server/gamecontroller.h>
 #include <game/server/entities/character.h>
 #include <game/server/player.h>
-#include "iLMS.h"
+#include "ilms.h"
 
 CGameController_iLMS::CGameController_iLMS(class CGameContext *pGameServer) :
 		IGameController(pGameServer)
