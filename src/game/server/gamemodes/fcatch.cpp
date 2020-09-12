@@ -89,7 +89,7 @@ int CGameController_fCatch::OnCharacterDeath(class CCharacter *pVictim, class CP
 	if(!pKiller)
 		return 0;
 
-  if (g_Config.m_SvfCatchPlusShowCapturedPlayers == 1)
+  if (g_Config.m_SvfCatchlusShowCapturedPlayers == 1)
     pVictim->GetPlayer()->m_Score = 0;
 
   int VictimID = pVictim->GetPlayer()->GetCID();
@@ -126,7 +126,7 @@ int CGameController_fCatch::OnCharacterDeath(class CCharacter *pVictim, class CP
 	else
 	{
 		//Punish selfkill/death
-    if (g_Config.m_SvfCatchPlusShowCapturedPlayers == 0)
+    if (g_Config.m_SvfCatchlusShowCapturedPlayers == 0)
     {
 		  if(WeaponID == WEAPON_SELF || WeaponID == WEAPON_WORLD)
 			  pVictim->GetPlayer()->m_Score -= g_Config.m_SvKillPenalty;

@@ -38,7 +38,7 @@ Makefile
 cmake_install.cmake
 install_manifest.txt
 
-fcatchp_srv*
+fcatch_srv*
 config.cfg
 .project
 .cproject

@@ -314,22 +314,22 @@ void CGameContext::StartVote(const char *pDesc, const char *pCommand, const char
 	//char buf[512];
 	//str_format(buf, strlen("change_map"), pCommand);
 
-	//if (g_Config.m_SvfCatchPlusMinMap == 1 && strcomp(buf, "change_map") == 0)
-	if (g_Config.m_SvfCatchPlusMinMap == 1 && str_find_nocase(pCommand, "change_map") == pCommand)
+	//if (g_Config.m_SvfCatchlusMinMap == 1 && strcomp(buf, "change_map") == 0)
+	if (g_Config.m_SvfCatchlusMinMap == 1 && str_find_nocase(pCommand, "change_map") == pCommand)
 	{
 		time_t now;
 		time(&now);
 
 		diff = difftime(now, m_LastMapVote);
 		diffplayer = difftime(now, pPlayer->m_joinTime);
-		if (diffplayer / 60 < g_Config.m_SvfCatchPlusMinMapPlayerTime)
+		if (diffplayer / 60 < g_Config.m_SvfCatchlusMinMapPlayerTime)
 		{
 			doVote = false;
 			dp = true;
 		}
 		else
 		{
-			if (diff / 60 < g_Config.m_SvfCatchPlusMinMapTime)
+			if (diff / 60 < g_Config.m_SvfCatchlusMinMapTime)
 			{
 				doVote = false;
 				dp = false;
@@ -367,13 +367,13 @@ void CGameContext::StartVote(const char *pDesc, const char *pCommand, const char
 		int seconds_remaining;
 		if (dp)
 		{
-			seconds_remaining = g_Config.m_SvfCatchPlusMinMapPlayerTime * 60 - diffplayer;
-			str_format(aBuf, sizeof(aBuf), "Vote failed. Players must be %d minutes in game before voting. %d minutes and %d seconds remaining.", g_Config.m_SvfCatchPlusMinMapPlayerTime, seconds_remaining / 60, seconds_remaining % 60);
+			seconds_remaining = g_Config.m_SvfCatchlusMinMapPlayerTime * 60 - diffplayer;
+			str_format(aBuf, sizeof(aBuf), "Vote failed. Players must be %d minutes in game before voting. %d minutes and %d seconds remaining.", g_Config.m_SvfCatchlusMinMapPlayerTime, seconds_remaining / 60, seconds_remaining % 60);
 		}
 		else
 		{
-			seconds_remaining = g_Config.m_SvfCatchPlusMinMapTime * 60 - diff;
-			str_format(aBuf, sizeof(aBuf), "Vote failed. Map votes only after %d minutes. %d minutes and %d seconds remaining.", g_Config.m_SvfCatchPlusMinMapTime, seconds_remaining / 60, seconds_remaining % 60);
+			seconds_remaining = g_Config.m_SvfCatchlusMinMapTime * 60 - diff;
+			str_format(aBuf, sizeof(aBuf), "Vote failed. Map votes only after %d minutes. %d minutes and %d seconds remaining.", g_Config.m_SvfCatchlusMinMapTime, seconds_remaining / 60, seconds_remaining % 60);
 		}
 
 		SendChat(-1, CGameContext::CHAT_ALL, aBuf);

@@ -48,7 +48,7 @@ bool CLaser::HitCharacter(vec2 From, vec2 To)
 		  pHit->GetPlayer()->m_Wallshot = true;
   		//pOwnerChar->GetPlayer()->RaiseMultiplier();
 	  }
-	  if (g_Config.m_SvfCatchPlusMode == 2)
+	  if (g_Config.m_SvfCatchlusMode == 2)
 		  m_CanKill = checkPosition(pOwnerChar,pHit) && pHit->m_FreezeTicks > 0;
 
     // 	if(m_Bounces > 0)
@@ -75,15 +75,15 @@ void CLaser::TryKill(CCharacter *pHit)
 	}
 	else
 	{
-		if (g_Config.m_SvfCatchPlusMode > 0 && pHit->m_FreezeTicks <= 0)
-			pHit->Freeze(Server()->TickSpeed()*g_Config.m_SvfCatchPlusFreezeTime);
+		if (g_Config.m_SvfCatchlusMode > 0 && pHit->m_FreezeTicks <= 0)
+			pHit->Freeze(Server()->TickSpeed()*g_Config.m_SvfCatchlusFreezeTime);
 	}
 }
 
 bool CLaser::checkPosition(CCharacter *pOwnerChar,CCharacter *pHit)
 {
 int diff = pOwnerChar->m_Pos.y - pHit->m_Pos.y;
-return (diff > 0 && diff > g_Config.m_SvfCatchPlusMinDiff && !pHit->IsGrounded());
+return (diff > 0 && diff > g_Config.m_SvfCatchlusMinDiff && !pHit->IsGrounded());
 }
 
 void CLaser::DoBounce()
