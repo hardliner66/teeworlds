@@ -91,4 +91,41 @@ MACRO_CONFIG_INT(SvVoteKickBantime, sv_vote_kick_bantime, 5, 0, 1440, CFGFLAG_SE
 
 MACRO_CONFIG_INT(DbgFocus, dbg_focus, 0, 0, 1, CFGFLAG_CLIENT, "")
 MACRO_CONFIG_INT(DbgTuning, dbg_tuning, 0, 0, 1, CFGFLAG_CLIENT, "")
+
+//zCatch:
+MACRO_CONFIG_INT(SvMode, sv_mode, 1, 1, 5, CFGFLAG_SERVER, "1 - Instagib; 2 - Everything; 3 - Hammerparty; 4 - Grenade; 5 - Ninja")
+MACRO_CONFIG_INT(SvAllowJoin, sv_allow_join, 2, 1, 2, CFGFLAG_SERVER, "Allow new Players to join without waiting for the next round")
+//1 = Allowed to join; 2 = Will join when person with the most kills die
+MACRO_CONFIG_INT(SvColorIndicator, sv_color_indicator, 1, 0, 1, CFGFLAG_SERVER, "Color tees apropriate to the number of currently caught players")
+MACRO_CONFIG_INT(SvBonus, sv_bonus, 0, 0, 100, CFGFLAG_SERVER, "Give the last player extra points")
+MACRO_CONFIG_INT(SvLaserjumps, sv_laserjumps, 0, 0, 1, CFGFLAG_SERVER, "Use laserjumps - on a laser bounce a explosion will occur which takes no damage")
+
+MACRO_CONFIG_INT(SvChatValue, sv_chat_value, 250, 100, 1000, CFGFLAG_SERVER, "A value which is added on each message and decreased on each tick")
+MACRO_CONFIG_INT(SvChatThreshold, sv_chat_threshold, 1000, 250, 10000, CFGFLAG_SERVER, "If this threshold will exceed by too many messages the player will be muted")
+MACRO_CONFIG_INT(SvMuteDuration, sv_mute_duration, 60, 0, 3600, CFGFLAG_SERVER, "How long the player will be muted (in seconds)")
+
+MACRO_CONFIG_INT(SvAnticamper, sv_anticamper, 2, 0, 2, CFGFLAG_SERVER, "0 disables, 1 enables anticamper in all modes and 2 only in Instagib")
+MACRO_CONFIG_INT(SvAnticamperFreeze, sv_anticamper_freeze, 7, 0, 15, CFGFLAG_SERVER, "If a player should freeze on camping (and how long) or die")
+MACRO_CONFIG_INT(SvAnticamperTime, sv_anticamper_time, 10, 5, 120, CFGFLAG_SERVER, "How long to wait till the player dies/freezes")
+MACRO_CONFIG_INT(SvAnticamperRange, sv_anticamper_range, 200, 0, 1000, CFGFLAG_SERVER, "Distance how far away the player must move to escape anticamper")
+
+MACRO_CONFIG_INT(SvGrenadeMinDamage, sv_grenade_min_damage, 4, 1, 6, CFGFLAG_SERVER, "How much damage the grenade must do to kill the player (depends how far away it explodes)")
+MACRO_CONFIG_INT(SvGrenadeEndlessAmmo, sv_grenade_endless_ammo, 1, 0, 1, CFGFLAG_SERVER, "Endless ammo for grenade (only mode 4). If not zero, set sv_grenade_bullets for the number of bullets")
+MACRO_CONFIG_INT(SvWeaponsAmmo, sv_weapons_ammo, 7, 5, 10, CFGFLAG_SERVER, "Default amount of ammo for all weapons in mode 2 or grenade in mode 4. Your ammo will regenerate after some while")
+
+MACRO_CONFIG_INT(SvVoteForceReason, sv_vote_forcereason, 1, 0, 1, CFGFLAG_SERVER, "Allow only votes with a reason (except settings)")
+MACRO_CONFIG_INT(SvSuicideTime, sv_suicide_time, 15, 0, 60, CFGFLAG_SERVER, "Minimum time between suicides. 0 to forbid suicides completely")
+MACRO_CONFIG_INT(SvKillPenalty, sv_kill_penalty, 5, 0, 50, CFGFLAG_SERVER, "The amount of points which the score will be decreased on each suicide")
+
+MACRO_CONFIG_INT(SvWallshot, sv_wallshot, 1, 0, 2, CFGFLAG_SERVER, "0 - Off; 1 - Bonus Points; 2 - Strict")
+MACRO_CONFIG_INT(SvWallshotBonus, sv_wallshot_bonus, 1, 1, 50, CFGFLAG_SERVER, "How many Bonus Points")
+MACRO_CONFIG_INT(SvAutoIdm, sv_auto_idm, 0, 0, 1, CFGFLAG_SERVER, "1 - switch back to idm if playercount below sv_zcatch_min_players")
+MACRO_CONFIG_INT(SvzCatchMinPlayers, sv_min_players, 4, 1, 17, CFGFLAG_SERVER, "How many active Players, before Gamemode changes from iDM to zCatch; 17 = only iDM")
+MACRO_CONFIG_INT(SvzCatchPlusMode, sv_plus_mode, 2, 0, 2, CFGFLAG_SERVER, "0 - off; 1 - simple; 2 - strict")
+MACRO_CONFIG_INT(SvzCatchPlusFreezeTime, sv_plus_freeze_time, 4, 1, 10, CFGFLAG_SERVER, "Freeze Time when hit")
+MACRO_CONFIG_INT(SvzCatchPlusMinDiff, sv_plus_min_height_diff, 10, 1, 50, CFGFLAG_SERVER, "Minimum height difference before player can kill")
+MACRO_CONFIG_INT(SvzCatchPlusMinMap, sv_plus_min_map, 0, 0, 1, CFGFLAG_SERVER, "Min play time is needed, bevor map can be changed")
+MACRO_CONFIG_INT(SvzCatchPlusMinMapTime, sv_plus_min_map_time, 15, 0, 1440, CFGFLAG_SERVER, "Minimum time before the map can be changed")
+MACRO_CONFIG_INT(SvzCatchPlusMinMapPlayerTime, sv_plus_min_map_player_time, 5, 0, 1440, CFGFLAG_SERVER, "Minimum time a player must be in game before the map can be changed")
+MACRO_CONFIG_INT(SvzCatchPlusShowCapturedPlayers, sv_plus_show_captured_players, 1, 0, 1, CFGFLAG_SERVER, "Score shows captured players instead of kills")
 #endif
