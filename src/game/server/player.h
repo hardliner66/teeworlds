@@ -23,7 +23,7 @@ public:
 	void TryRespawn();
 	void Respawn();
 	void SetTeam(int Team, bool DoChatMsg=true);
-	void SetTeamDirect(int Team); //zCatch
+	void SetTeamDirect(int Team); //fCatch
 	int GetTeam() const { return m_Team; };
 	int GetCID() const { return m_ClientID; };
 
@@ -100,15 +100,15 @@ public:
 		int m_Min;
 		int m_Max;
 	} m_Latency;
-	
-	//zCatch:
-	enum { ZCATCH_NOT_CAUGHT = -1 };
+
+	//fCatch:
+	enum { FCATCH_NOT_CAUGHT = -1 };
 	int m_CaughtBy;
 	int m_SpecExplicit;
 	int m_Deaths;
 	int m_Kills;
 	int m_LastKillTry;
-	
+
 	int m_TicksSpec;
 	int m_TicksIngame;
 	int m_ChatTicks;
@@ -118,8 +118,8 @@ public:
 	int m_CampTick;
 	vec2 m_CampPos;
 	void RaiseMultiplier();
-	
-	
+
+
 private:
 	CCharacter *m_pCharacter;
 	CGameContext *m_pGameServer;

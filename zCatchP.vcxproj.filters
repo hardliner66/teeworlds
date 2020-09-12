@@ -375,7 +375,7 @@
     <ClCompile Include="src\game\server\gamemodes\tdm.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\game\server\gamemodes\zcatch.cpp">
+    <ClCompile Include="src\game\server\gamemodes\fcatch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\game\server\gamemodes\iLMS.cpp">
@@ -782,7 +782,7 @@
     <ClInclude Include="src\game\server\gamemodes\tdm.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\game\server\gamemodes\zcatch.h">
+    <ClInclude Include="src\game\server\gamemodes\fcatch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\osxlaunch\client.h">

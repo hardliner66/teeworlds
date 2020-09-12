@@ -23,7 +23,7 @@ CPlayer::CPlayer(CGameContext *pGameServer, int ClientID, int Team)
 	m_TeamChangeTick = Server()->Tick();
 	m_Multiplier = 0;
 	m_Wallshot = false;
-	//zCatch
+	//fCatch
 	m_CaughtBy = -1;
 	m_SpecExplicit = 0;
 	m_Kills = 0;
@@ -50,7 +50,7 @@ void CPlayer::Tick()
 
 	Server()->SetClientScore(m_ClientID, m_Score);
 
-	/* begin zCatch*/
+	/* begin fCatch*/
 
 	if(m_Team == TEAM_SPECTATORS)
 		m_TicksSpec++;
@@ -62,7 +62,7 @@ void CPlayer::Tick()
 
 	if((g_Config.m_SvAnticamper == 2) || (g_Config.m_SvAnticamper == 1))
 		Anticamper();
-	/* end zCatch*/
+	/* end fCatch*/
 
 	// do latency stuff
 	{

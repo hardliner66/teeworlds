@@ -47,7 +47,7 @@ void CGameController_iLMS::DoWincheck()
 		m_PlayerCount = Players;
 		m_ActivePlayerCount = Players - Players_Spec;
 
-		/*if(m_ActivePlayerCount >= g_Config.m_SvzCatchMinPlayers)
+		/*if(m_ActivePlayerCount >= g_Config.m_SvfCatchMinPlayers)
 		{
 			m_iLMS_enabled = true;
 		}
@@ -58,9 +58,9 @@ void CGameController_iLMS::DoWincheck()
 			{
 				if(GameServer()->m_apPlayers[i])
 				{
-					if(GameServer()->m_apPlayers[i]->m_CaughtBy != CPlayer::ZCATCH_NOT_CAUGHT)
+					if(GameServer()->m_apPlayers[i]->m_CaughtBy != CPlayer::FCATCH_NOT_CAUGHT)
 					{
-						GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::ZCATCH_NOT_CAUGHT;
+						GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::FCATCH_NOT_CAUGHT;
 						GameServer()->m_apPlayers[i]->SetTeamDirect(GameServer()->m_pController->ClampTeam(1));
 					}
 				}
@@ -121,7 +121,7 @@ int CGameController_iLMS::OnCharacterDeath(class CCharacter *pVictim, class CPla
 		if(pKiller->GetTeam() != TEAM_SPECTATORS)
 		{
 			pVictim->GetPlayer()->m_CaughtBy = pKiller->GetCID();
-      //pVictim->GetPlayer()->m_CaughtBy = CPlayer::ZCATCH_NOT_CAUGHT;
+      //pVictim->GetPlayer()->m_CaughtBy = CPlayer::FCATCH_NOT_CAUGHT;
 			pVictim->GetPlayer()->SetTeamDirect(TEAM_SPECTATORS);
 
 			pVictim->GetPlayer()->m_SpectatorID = pKiller->GetCID(); // Let the victim follow his catcher
@@ -146,7 +146,7 @@ int CGameController_iLMS::OnCharacterDeath(class CCharacter *pVictim, class CPla
 		{
 			if(GameServer()->m_apPlayers[i]->m_CaughtBy == VictimID)
 			{
-				//GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::ZCATCH_NOT_CAUGHT;
+				//GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::FCATCH_NOT_CAUGHT;
 				//GameServer()->m_apPlayers[i]->SetTeamDirect(GameServer()->m_pController->ClampTeam(1));
         GameServer()->m_apPlayers[i]->m_CaughtBy = pKiller->GetCID();
         GameServer()->m_apPlayers[i]->m_SpectatorID = pKiller->GetCID(); // Let the victim follow his catcher
@@ -189,7 +189,7 @@ void CGameController_iLMS::StartRound()
 	{
 		if(GameServer()->m_apPlayers[i])
 		{
-			GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::ZCATCH_NOT_CAUGHT;
+			GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::FCATCH_NOT_CAUGHT;
 			GameServer()->m_apPlayers[i]->m_Kills = 0;
 			GameServer()->m_apPlayers[i]->m_Deaths = 0;
 			GameServer()->m_apPlayers[i]->m_TicksSpec = 0;
@@ -232,7 +232,7 @@ void CGameController_iLMS::EndRound()
 					str_format(aBuf, sizeof(aBuf), "Spec: %.2f%% | Ingame: %.2f%%", (double) TimeInSpec, (double) (100.0 - TimeInSpec));
 					GameServer()->SendChatTarget(i, aBuf);
 				}
-				GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::ZCATCH_NOT_CAUGHT; //Set all players in server as non-caught
+				GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::FCATCH_NOT_CAUGHT; //Set all players in server as non-caught
 			}
 		}
 	}

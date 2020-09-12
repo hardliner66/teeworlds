@@ -1,20 +1,20 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
-/* zCatch by erd and Teetime                                                                 */
+/* fCatch by hardliner66, based on zcatch by erd and Teetime                                 */
 
-#ifndef GAME_SERVER_GAMEMODES_ZCATCH_H
-#define GAME_SERVER_GAMEMODES_ZCATCH_H
+#ifndef GAME_SERVER_GAMEMODES_FCATCH_H
+#define GAME_SERVER_GAMEMODES_FCATCH_H
 
 #include <game/server/gamecontroller.h>
 
-class CGameController_zCatch: public IGameController
+class CGameController_fCatch: public IGameController
 {
 	int m_PlayerCount;
 	int m_ActivePlayerCount;
-	bool m_zCatch_enabled;
+	bool m_fCatch_enabled;
 
 public:
-	CGameController_zCatch(class CGameContext *pGameServer);
+	CGameController_fCatch(class CGameContext *pGameServer);
 	virtual void Tick();
 	virtual void DoWincheck();
 

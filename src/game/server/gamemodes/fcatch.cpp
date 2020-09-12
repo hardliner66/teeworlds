@@ -1,31 +1,31 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
-/* zCatch by erd and Teetime                                                                 */
+/* fCatch by hardliner66, based on zcatch by erd and Teetime                                 */
 
 #include <engine/shared/config.h>
 #include <game/server/gamecontext.h>
 #include <game/server/gamecontroller.h>
 #include <game/server/entities/character.h>
 #include <game/server/player.h>
-#include "zcatch.h"
+#include "fcatch.h"
 
-CGameController_zCatch::CGameController_zCatch(class CGameContext *pGameServer) :
+CGameController_fCatch::CGameController_fCatch(class CGameContext *pGameServer) :
 		IGameController(pGameServer)
 {
-	m_pGameType = "zCatch+";
+	m_pGameType = "fCatch+";
 	m_PlayerCount = 0;
 	m_ActivePlayerCount = 0;
-	m_zCatch_enabled = false;
+	m_fCatch_enabled = false;
 }
 
-void CGameController_zCatch::Tick()
+void CGameController_fCatch::Tick()
 {
 	IGameController::Tick();
 	if(m_GameOverTick == -1)
 		CalcPlayerColor();
 }
 
-void CGameController_zCatch::DoWincheck()
+void CGameController_fCatch::DoWincheck()
 {
 	if(m_GameOverTick == -1)
 	{
@@ -46,20 +46,20 @@ void CGameController_zCatch::DoWincheck()
 		m_PlayerCount = Players;
 		m_ActivePlayerCount = Players - Players_Spec;
 
-		if(m_ActivePlayerCount >= g_Config.m_SvzCatchMinPlayers)
+		if(m_ActivePlayerCount >= g_Config.m_SvfCatchMinPlayers)
 		{
-			m_zCatch_enabled = true;
+			m_fCatch_enabled = true;
 		}
 		else if (g_Config.m_SvAutoIdm == 1)
 		{
-			m_zCatch_enabled = false;
+			m_fCatch_enabled = false;
 			for(int i = 0; i < MAX_CLIENTS; i++)
 			{
 				if(GameServer()->m_apPlayers[i])
 				{
-					if(GameServer()->m_apPlayers[i]->m_CaughtBy != CPlayer::ZCATCH_NOT_CAUGHT)
+					if(GameServer()->m_apPlayers[i]->m_CaughtBy != CPlayer::FCATCH_NOT_CAUGHT)
 					{
-						GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::ZCATCH_NOT_CAUGHT;
+						GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::FCATCH_NOT_CAUGHT;
 						GameServer()->m_apPlayers[i]->SetTeamDirect(GameServer()->m_pController->ClampTeam(1));
 					}
 				}
@@ -84,12 +84,12 @@ void CGameController_zCatch::DoWincheck()
 	}
 }
 
-int CGameController_zCatch::OnCharacterDeath(class CCharacter *pVictim, class CPlayer *pKiller, int WeaponID)
+int CGameController_fCatch::OnCharacterDeath(class CCharacter *pVictim, class CPlayer *pKiller, int WeaponID)
 {
 	if(!pKiller)
 		return 0;
 
-  if (g_Config.m_SvzCatchPlusShowCapturedPlayers == 1)
+  if (g_Config.m_SvfCatchPlusShowCapturedPlayers == 1)
     pVictim->GetPlayer()->m_Score = 0;
 
   int VictimID = pVictim->GetPlayer()->GetCID();
@@ -111,7 +111,7 @@ int CGameController_zCatch::OnCharacterDeath(class CCharacter *pVictim, class CP
 		pVictim->GetPlayer()->m_Wallshot=false;
 
 		/* Check if the killer is already killed and in spectator (victim may died through wallshot) */
-		if(pKiller->GetTeam() != TEAM_SPECTATORS && m_zCatch_enabled == true)
+		if(pKiller->GetTeam() != TEAM_SPECTATORS && m_fCatch_enabled == true)
 		{
 			pVictim->GetPlayer()->m_CaughtBy = pKiller->GetCID();
 			pVictim->GetPlayer()->SetTeamDirect(TEAM_SPECTATORS);
@@ -126,7 +126,7 @@ int CGameController_zCatch::OnCharacterDeath(class CCharacter *pVictim, class CP
 	else
 	{
 		//Punish selfkill/death
-    if (g_Config.m_SvzCatchPlusShowCapturedPlayers == 0)
+    if (g_Config.m_SvfCatchPlusShowCapturedPlayers == 0)
     {
 		  if(WeaponID == WEAPON_SELF || WeaponID == WEAPON_WORLD)
 			  pVictim->GetPlayer()->m_Score -= g_Config.m_SvKillPenalty;
@@ -139,7 +139,7 @@ int CGameController_zCatch::OnCharacterDeath(class CCharacter *pVictim, class CP
 		{
 			if(GameServer()->m_apPlayers[i]->m_CaughtBy == VictimID)
 			{
-				GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::ZCATCH_NOT_CAUGHT;
+				GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::FCATCH_NOT_CAUGHT;
 				GameServer()->m_apPlayers[i]->SetTeamDirect(GameServer()->m_pController->ClampTeam(1));
 
 				//if(pKiller != pVictim->GetPlayer())
@@ -154,7 +154,7 @@ int CGameController_zCatch::OnCharacterDeath(class CCharacter *pVictim, class CP
 	return 0;
 }
 
-void CGameController_zCatch::OnPlayerInfoChange(class CPlayer *pP)
+void CGameController_fCatch::OnPlayerInfoChange(class CPlayer *pP)
 {
 	if(g_Config.m_SvColorIndicator)
 	{
@@ -168,15 +168,15 @@ void CGameController_zCatch::OnPlayerInfoChange(class CPlayer *pP)
 	}
 }
 
-void CGameController_zCatch::StartRound()
+void CGameController_fCatch::StartRound()
 {
 	IGameController::StartRound();
-	m_zCatch_enabled = false;
+	m_fCatch_enabled = false;
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
 		if(GameServer()->m_apPlayers[i])
 		{
-			GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::ZCATCH_NOT_CAUGHT;
+			GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::FCATCH_NOT_CAUGHT;
 			GameServer()->m_apPlayers[i]->m_Kills = 0;
 			GameServer()->m_apPlayers[i]->m_Deaths = 0;
 			GameServer()->m_apPlayers[i]->m_TicksSpec = 0;
@@ -185,7 +185,7 @@ void CGameController_zCatch::StartRound()
 	}
 }
 
-void CGameController_zCatch::OnCharacterSpawn(class CCharacter *pChr)
+void CGameController_fCatch::OnCharacterSpawn(class CCharacter *pChr)
 {
 	// default health and armor
 	pChr->IncreaseHealth(10);
@@ -198,7 +198,7 @@ void CGameController_zCatch::OnCharacterSpawn(class CCharacter *pChr)
 	OnPlayerInfoChange(pChr->GetPlayer());
 }
 
-void CGameController_zCatch::EndRound()
+void CGameController_fCatch::EndRound()
 {
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
@@ -219,7 +219,7 @@ void CGameController_zCatch::EndRound()
 					str_format(aBuf, sizeof(aBuf), "Spec: %.2f%% | Ingame: %.2f%%", (double) TimeInSpec, (double) (100.0 - TimeInSpec));
 					GameServer()->SendChatTarget(i, aBuf);
 				}
-				GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::ZCATCH_NOT_CAUGHT; //Set all players in server as non-caught
+				GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::FCATCH_NOT_CAUGHT; //Set all players in server as non-caught
 			}
 		}
 	}
@@ -232,14 +232,14 @@ void CGameController_zCatch::EndRound()
 	m_SuddenDeath = 0;
 }
 
-bool CGameController_zCatch::CanChangeTeam(CPlayer *pPlayer, int JoinTeam)
+bool CGameController_fCatch::CanChangeTeam(CPlayer *pPlayer, int JoinTeam)
 {
 	if(pPlayer->m_CaughtBy >= 0)
 		return false;
 	return true;
 }
 
-bool CGameController_zCatch::OnEntity(int Index, vec2 Pos)
+bool CGameController_fCatch::OnEntity(int Index, vec2 Pos)
 {
 	if(Index == ENTITY_SPAWN)
 		m_aaSpawnPoints[0][m_aNumSpawnPoints[0]++] = Pos;
@@ -251,7 +251,7 @@ bool CGameController_zCatch::OnEntity(int Index, vec2 Pos)
 	return false;
 }
 
-void CGameController_zCatch::CalcPlayerColor()
+void CGameController_fCatch::CalcPlayerColor()
 {
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{

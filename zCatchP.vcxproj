@@ -162,7 +162,7 @@
     <ClCompile Include="src\game\server\gamemodes\iLMS.cpp" />
     <ClCompile Include="src\game\server\gamemodes\mod.cpp" />
     <ClCompile Include="src\game\server\gamemodes\tdm.cpp" />
-    <ClCompile Include="src\game\server\gamemodes\zcatch.cpp" />
+    <ClCompile Include="src\game\server\gamemodes\fcatch.cpp" />
     <ClCompile Include="src\game\server\gameworld.cpp" />
     <ClCompile Include="src\game\server\player.cpp" />
   </ItemGroup>
@@ -295,7 +295,7 @@
     <ClInclude Include="src\game\server\gamemodes\iLMS.h" />
     <ClInclude Include="src\game\server\gamemodes\mod.h" />
     <ClInclude Include="src\game\server\gamemodes\tdm.h" />
-    <ClInclude Include="src\game\server\gamemodes\zcatch.h" />
+    <ClInclude Include="src\game\server\gamemodes\fcatch.h" />
     <ClInclude Include="src\game\server\gameworld.h" />
     <ClInclude Include="src\game\server\player.h" />
     <ClInclude Include="src\game\tuning.h" />

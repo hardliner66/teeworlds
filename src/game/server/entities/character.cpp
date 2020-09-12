@@ -58,10 +58,10 @@ bool CCharacter::Spawn(CPlayer *pPlayer, vec2 Pos)
 	m_EmoteStop = -1;
 	m_LastAction = -1;
 
-	/*zCatch */
+	/*fCatch */
 	m_ActiveWeapon = WEAPON_RIFLE;
 	m_LastWeapon = WEAPON_RIFLE;
-    /* end zCatch */
+    /* end fCatch */
 
 	m_LastNoAmmoSound = -1;
 	m_QueuedWeapon = -1;
@@ -121,7 +121,7 @@ void CCharacter::HandleNinja()
 	if(m_ActiveWeapon != WEAPON_NINJA)
 		return;
 
-	/* zCatch - Disable for Ninja-Mode
+	/* fCatch - Disable for Ninja-Mode
 	if ((Server()->Tick() - m_Ninja.m_ActivationTick) > (g_pData->m_Weapons.m_Ninja.m_Duration * Server()->TickSpeed() / 1000))
 	{
 		// time's up, return
@@ -774,13 +774,13 @@ bool CCharacter::TakeDamage(vec2 Force, int Dmg, int From, int Weapon)
 	if(GameServer()->m_pController->IsFriendlyFire(m_pPlayer->GetCID(), From) && !g_Config.m_SvTeamdamage)
 		return false;
 
-	/* zCatch */
+	/* fCatch */
 	if(From == m_pPlayer->GetCID() || Weapon == WEAPON_GAME)
 		return false;
 
 	m_Health = 0;
 	m_Armor = 0;
-	/* end zCatch */
+	/* end fCatch */
 
 	m_DamageTaken++;
 
