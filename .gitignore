@@ -37,3 +37,11 @@ CPackSourceConfig.cmake
 Makefile
 cmake_install.cmake
 install_manifest.txt
+
+zcatchp_srv*
+config.cfg
+.project
+.cproject
+
+banmaster*
+

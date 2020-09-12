@@ -1,0 +1,28 @@
+﻿Der Buildvorgang wurde am 10.12.2013 18:44:12 gestartet.
+     1>Projekt "C:\Users\steve\Documents\GitHub\zCatchP\zCatchP.vcxproj" auf Knoten "2", build Ziel(e).
+     1>PrepareForBuild:
+         Das Verzeichnis "obj\Win32\Debug\" wird erstellt.
+       Build:
+         ..\bam\bam debug
+         auto configuration
+         
+         configuration:
+         AUTO  compiler             cl
+         AUTO  stackprotector       yes
+         AUTO  minmacosxsdk         yes
+         AUTO  macosxppc            no
+         AUTO  zlib                 not found
+         AUTO  sdl                  using supplied win32 libraries
+         AUTO  freetype             using supplied win32 libraries
+         
+         notes:
+         saved configuration to 'config.lua'
+         
+     1>bam : error : 'other/icons/teeworlds_srv_cl.rc' does not exist and no way to generate it
+     1>bam : error : a build step failed
+     1>C:\Program Files (x86)\MSBuild\Microsoft.Cpp\v4.0\Microsoft.MakeFile.Targets(38,5): error MSB3073: Der Befehl "..\bam\bam debug" wurde mit dem Code 1 beendet.
+     1>Die Erstellung des Projekts "C:\Users\steve\Documents\GitHub\zCatchP\zCatchP.vcxproj" ist abgeschlossen, build Ziel(e) -- FEHLER.
+
+Fehler beim Erstellen
+
+Verstrichene Zeit 00:00:00.96
