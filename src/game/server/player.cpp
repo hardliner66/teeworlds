@@ -21,6 +21,17 @@ CPlayer::CPlayer(CGameContext *pGameServer, int ClientID, int Team)
 	m_SpectatorID = SPEC_FREEVIEW;
 	m_LastActionTick = Server()->Tick();
 	m_TeamChangeTick = Server()->Tick();
+	m_Multiplier = 0;
+	m_Wallshot = false;
+	//zCatch
+	m_CaughtBy = -1;
+	m_SpecExplicit = 0;
+	m_Kills = 0;
+	m_Deaths = 0;
+	m_LastKillTry = Server()->Tick();
+	m_TicksSpec = 0;
+	m_TicksIngame = 0;
+	m_ChatTicks = 0;
 }
 
 CPlayer::~CPlayer()
@@ -38,6 +49,20 @@ void CPlayer::Tick()
 		return;
 
 	Server()->SetClientScore(m_ClientID, m_Score);
+	
+	/* begin zCatch*/
+	
+	if(m_Team == TEAM_SPECTATORS)
+		m_TicksSpec++;
+	else
+		m_TicksIngame++;
+	
+	if(m_ChatTicks > 0)
+		m_ChatTicks--;
+
+	if((g_Config.m_SvAnticamper == 2 && g_Config.m_SvMode == 1) || (g_Config.m_SvAnticamper == 1))
+		Anticamper();
+	/* end zCatch*/
 
 	// do latency stuff
 	{
@@ -157,6 +182,8 @@ void CPlayer::Snap(int SnappingClient)
 
 void CPlayer::OnDisconnect(const char *pReason)
 {
+	//m_Multiplier = 0;
+	m_Wallshot = false;
 	KillCharacter();
 
 	if(Server()->ClientIngame(m_ClientID))
@@ -177,6 +204,9 @@ void CPlayer::OnPredictedInput(CNetObj_PlayerInput *NewInput)
 {
 	// skip the input if chat is active
 	if((m_PlayerFlags&PLAYERFLAG_CHATTING) && (NewInput->m_PlayerFlags&PLAYERFLAG_CHATTING))
+		return;
+
+	if(m_pCharacter && m_pCharacter->m_FreezeTicks)
 		return;
 
 	if(m_pCharacter)
@@ -203,6 +233,9 @@ void CPlayer::OnDirectInput(CNetObj_PlayerInput *NewInput)
 
 	if(m_pCharacter)
 		m_pCharacter->OnDirectInput(NewInput);
+
+	if(m_pCharacter && m_pCharacter->m_FreezeTicks)
+		return;
 
 	if(!m_pCharacter && m_Team != TEAM_SPECTATORS && (NewInput->m_Fire&1))
 		m_Spawning = true;
@@ -275,7 +308,15 @@ void CPlayer::SetTeam(int Team, bool DoChatMsg)
 			if(GameServer()->m_apPlayers[i] && GameServer()->m_apPlayers[i]->m_SpectatorID == m_ClientID)
 				GameServer()->m_apPlayers[i]->m_SpectatorID = SPEC_FREEVIEW;
 		}
+		m_SpecExplicit = 1;
 	}
+	else
+		m_SpecExplicit = 0;
+}
+
+void CPlayer::SetTeamDirect(int Team)
+{
+	m_Team = Team;
 }
 
 void CPlayer::TryRespawn()
@@ -289,4 +330,70 @@ void CPlayer::TryRespawn()
 	m_pCharacter = new(m_ClientID) CCharacter(&GameServer()->m_World);
 	m_pCharacter->Spawn(this, SpawnPos);
 	GameServer()->CreatePlayerSpawn(SpawnPos);
+}
+
+char* itoa(int val, int base){
+	static char buf[32] = {0};
+	int i = 30;
+	for(; val && i ; --i, val /= base)
+		buf[i] = "0123456789abcdef"[val % base];
+	return &buf[i+1];
+}
+
+void CPlayer::RaiseMultiplier()
+{
+m_Multiplier++;
+GameServer()->SendBroadcast(itoa(m_Multiplier,10), m_ClientID);
+}
+
+int CPlayer::Anticamper()
+{
+	
+	if(GameServer()->m_World.m_Paused || !m_pCharacter || m_Team == TEAM_SPECTATORS || m_pCharacter->m_FreezeTicks)
+	{
+		m_CampTick = -1;
+		m_SentCampMsg = false;
+		return 0;
+	}
+
+	int AnticamperTime = g_Config.m_SvAnticamperTime;
+	int AnticamperRange = g_Config.m_SvAnticamperRange;
+
+	if(m_CampTick == -1)
+	{
+		m_CampPos = m_pCharacter->m_Pos;
+		m_CampTick = Server()->Tick() + Server()->TickSpeed()*AnticamperTime;
+	}
+
+	// Check if the player is moving
+	if((m_CampPos.x - m_pCharacter->m_Pos.x >= (float)AnticamperRange || m_CampPos.x - m_pCharacter->m_Pos.x <= -(float)AnticamperRange)
+	|| (m_CampPos.y - m_pCharacter->m_Pos.y >= (float)AnticamperRange || m_CampPos.y - m_pCharacter->m_Pos.y <= -(float)AnticamperRange))
+		{
+			m_CampTick = -1;
+		}
+
+	// Send warning to the player
+	if(m_CampTick <= Server()->Tick() + Server()->TickSpeed() * AnticamperTime/2 && m_CampTick != -1 && !m_SentCampMsg)
+	{
+		GameServer()->SendBroadcast("ANTICAMPER: Move or die", m_ClientID);
+		m_SentCampMsg = true;
+	}
+
+	// Kill him
+	if((m_CampTick <= Server()->Tick()) && (m_CampTick > 0))
+	{
+		if(g_Config.m_SvAnticamperFreeze)
+		{
+			//m_Multiplier = 0;
+			//m_Wallshot = false;
+			m_pCharacter->Freeze(Server()->TickSpeed()*g_Config.m_SvAnticamperFreeze);
+			GameServer()->SendBroadcast("You have been freezed due camping", m_ClientID);
+		}
+		else
+			m_pCharacter->Die(m_ClientID, WEAPON_GAME);
+		m_CampTick = -1;
+		m_SentCampMsg = false;
+		return 1;
+	}
+	return 0;
 }

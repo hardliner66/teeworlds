@@ -16,17 +16,22 @@ public:
 	CPlayer(CGameContext *pGameServer, int ClientID, int Team);
 	~CPlayer();
 
+	time_t m_joinTime;
+
 	void Init(int CID);
 
 	void TryRespawn();
 	void Respawn();
 	void SetTeam(int Team, bool DoChatMsg=true);
+	void SetTeamDirect(int Team); //zCatch
 	int GetTeam() const { return m_Team; };
 	int GetCID() const { return m_ClientID; };
 
 	void Tick();
 	void PostTick();
 	void Snap(int SnappingClient);
+	int m_Multiplier;
+	bool m_Wallshot;
 
 	void OnDirectInput(CNetObj_PlayerInput *NewInput);
 	void OnPredictedInput(CNetObj_PlayerInput *NewInput);
@@ -95,7 +100,26 @@ public:
 		int m_Min;
 		int m_Max;
 	} m_Latency;
-
+	
+	//zCatch:
+	enum { ZCATCH_NOT_CAUGHT = -1 };
+	int m_CaughtBy;
+	int m_SpecExplicit;
+	int m_Deaths;
+	int m_Kills;
+	int m_LastKillTry;
+	
+	int m_TicksSpec;
+	int m_TicksIngame;
+	int m_ChatTicks;
+	//Anticamper
+	int Anticamper();
+	bool m_SentCampMsg;
+	int m_CampTick;
+	vec2 m_CampPos;
+	void RaiseMultiplier();
+	
+	
 private:
 	CCharacter *m_pCharacter;
 	CGameContext *m_pGameServer;
