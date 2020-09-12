@@ -661,7 +661,6 @@ void CGameContext::OnClientEnter(int ClientID)
 		StartTeam = m_pController->GetAutoTeam(ClientID);
 
 	m_apPlayers[ClientID]->SetTeamDirect(StartTeam);
-
 	/* end fCatch */
 
 	char aBuf[512];
@@ -1167,7 +1166,10 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 			pPlayer->m_LastKillTry = Server()->Tick();
 			/* end fCatch*/
 		}
-		else if (MsgID == NETMSGTYPE_CL_STARTINFO)
+	}
+	else
+	{
+		if (MsgID == NETMSGTYPE_CL_STARTINFO)
 		{
 			if (pPlayer->m_IsReady)
 				return;
