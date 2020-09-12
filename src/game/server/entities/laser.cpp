@@ -2,6 +2,7 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include <game/generated/protocol.h>
 #include <game/server/gamecontext.h>
+#include <engine/shared/config.h>
 #include "laser.h"
 
 CLaser::CLaser(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, float StartEnergy, int Owner)
@@ -13,9 +14,11 @@ CLaser::CLaser(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, float StartEner
 	m_Dir = Direction;
 	m_Bounces = 0;
 	m_EvalTick = 0;
+	m_CanKill = true;
 	GameWorld()->InsertEntity(this);
 	DoBounce();
 }
+
 
 
 bool CLaser::HitCharacter(vec2 From, vec2 To)
@@ -24,13 +27,63 @@ bool CLaser::HitCharacter(vec2 From, vec2 To)
 	CCharacter *pOwnerChar = GameServer()->GetPlayerChar(m_Owner);
 	CCharacter *pHit = GameServer()->m_World.IntersectCharacter(m_Pos, To, 0.f, At, pOwnerChar);
 	if(!pHit)
+	{
+		//pOwnerChar->GetPlayer()->m_Multiplier=0;
 		return false;
-
+	}
+	
 	m_From = From;
 	m_Pos = At;
 	m_Energy = -1;
-	pHit->TakeDamage(vec2(0.f, 0.f), GameServer()->Tuning()->m_LaserDamage, m_Owner, WEAPON_RIFLE);
+
+  if (GameServer()->m_pController->m_pGameType == "iLMS")
+  {
+    m_CanKill = true;
+    TryKill(pHit);
+  }
+  else
+  {
+	  if(m_Bounces > 0)
+	  {
+		  pHit->GetPlayer()->m_Wallshot = true;
+  		//pOwnerChar->GetPlayer()->RaiseMultiplier();
+	  }
+	  if (g_Config.m_SvzCatchPlusMode == 2)
+		  m_CanKill = checkPosition(pOwnerChar,pHit) && pHit->m_FreezeTicks > 0;
+  		
+    // 	if(m_Bounces > 0)
+  	if(g_Config.m_SvWallshot != 2)
+  	{
+  		TryKill(pHit);
+	  }
+	  else
+	  {
+		  if(m_Bounces > 0)
+		  {
+			  TryKill(pHit);
+  		}
+	  }
+  }
 	return true;
+}
+
+void CLaser::TryKill(CCharacter *pHit)
+{
+	if(m_CanKill)
+	{
+		pHit->TakeDamage(vec2(0.f, 0.f), GameServer()->Tuning()->m_LaserDamage, m_Owner, WEAPON_RIFLE);
+	}
+	else
+	{
+		if (g_Config.m_SvzCatchPlusMode > 0 && pHit->m_FreezeTicks <= 0)
+			pHit->Freeze(Server()->TickSpeed()*g_Config.m_SvzCatchPlusFreezeTime);
+	}
+}
+
+bool CLaser::checkPosition(CCharacter *pOwnerChar,CCharacter *pHit)
+{
+int diff = pOwnerChar->m_Pos.y - pHit->m_Pos.y;
+return (diff > 0 && diff > g_Config.m_SvzCatchPlusMinDiff && !pHit->IsGrounded());
 }
 
 void CLaser::DoBounce()
@@ -67,6 +120,9 @@ void CLaser::DoBounce()
 				m_Energy = -1;
 
 			GameServer()->CreateSound(m_Pos, SOUND_RIFLE_BOUNCE);
+
+			if(m_Bounces == 1 && g_Config.m_SvLaserjumps)
+				GameServer()->CreateExplosion(m_Pos, m_Owner, WEAPON_GAME, false);
 		}
 	}
 	else

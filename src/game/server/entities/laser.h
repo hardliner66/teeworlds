@@ -26,6 +26,9 @@ private:
 	int m_Bounces;
 	int m_EvalTick;
 	int m_Owner;
+	void TryKill(CCharacter *pHit);
+	bool checkPosition(CCharacter *pOwnerChar,CCharacter *pHit);
+	bool m_CanKill;
 };
 
 #endif
