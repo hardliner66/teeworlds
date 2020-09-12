@@ -49,18 +49,18 @@ void CPlayer::Tick()
 		return;
 
 	Server()->SetClientScore(m_ClientID, m_Score);
-	
+
 	/* begin zCatch*/
-	
+
 	if(m_Team == TEAM_SPECTATORS)
 		m_TicksSpec++;
 	else
 		m_TicksIngame++;
-	
+
 	if(m_ChatTicks > 0)
 		m_ChatTicks--;
 
-	if((g_Config.m_SvAnticamper == 2 && g_Config.m_SvMode == 1) || (g_Config.m_SvAnticamper == 1))
+	if((g_Config.m_SvAnticamper == 2) || (g_Config.m_SvAnticamper == 1))
 		Anticamper();
 	/* end zCatch*/
 
@@ -348,7 +348,7 @@ GameServer()->SendBroadcast(itoa(m_Multiplier,10), m_ClientID);
 
 int CPlayer::Anticamper()
 {
-	
+
 	if(GameServer()->m_World.m_Paused || !m_pCharacter || m_Team == TEAM_SPECTATORS || m_pCharacter->m_FreezeTicks)
 	{
 		m_CampTick = -1;
