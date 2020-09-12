@@ -819,7 +819,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 			if (!str_comp("/info", pMsg->m_pMessage) || !str_comp("/about", pMsg->m_pMessage))
 			{
 				char aBuf[128];
-				str_format(aBuf, sizeof(aBuf), "fCatch+ version %s by Hardliner, original mod by erd and Teetime. Type /cmdlist for all commands.", FCATCH_VERSION);
+				str_format(aBuf, sizeof(aBuf), "fCatch version %s by Hardliner, original mod by erd and Teetime. Type /cmdlist for all commands.", FCATCH_VERSION);
 				SendChatTarget(ClientID, " ");
 				SendChatTarget(ClientID, aBuf);
 			}
