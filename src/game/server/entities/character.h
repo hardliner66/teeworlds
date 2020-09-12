@@ -64,6 +64,9 @@ public:
 	bool IsAlive() const { return m_Alive; }
 	class CPlayer *GetPlayer() { return m_pPlayer; }
 
+	void Freeze(int Tick);
+	int m_FreezeTicks;
+
 private:
 	// player controlling this character
 	class CPlayer *m_pPlayer;
