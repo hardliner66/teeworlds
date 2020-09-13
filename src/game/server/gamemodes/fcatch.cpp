@@ -15,6 +15,7 @@ CGameController_fCatch::CGameController_fCatch(class CGameContext *pGameServer) 
 	m_PlayerCount = 0;
 	m_ActivePlayerCount = 0;
 	m_fCatch_enabled = false;
+	m_fCatch_started = false;
 }
 
 void CGameController_fCatch::Tick()
@@ -45,11 +46,11 @@ void CGameController_fCatch::DoWincheck()
 		m_PlayerCount = Players;
 		m_ActivePlayerCount = Players - Players_Spec;
 
-		if (m_ActivePlayerCount >= g_Config.m_SvfCatchMinPlayers)
+		if (g_Config.m_SvAutoIdm == 0 || m_ActivePlayerCount >= g_Config.m_SvfCatchMinPlayers)
 		{
 			m_fCatch_enabled = true;
 		}
-		else if (g_Config.m_SvAutoIdm == 1)
+		else if (g_Config.m_SvAutoIdm == 1 && m_fCatch_started == false)
 		{
 			m_fCatch_enabled = false;
 			for (int i = 0; i < MAX_CLIENTS; i++)
@@ -101,6 +102,9 @@ int CGameController_fCatch::OnCharacterDeath(class CCharacter *pVictim, class CP
 
 	if (pKiller != pVictim->GetPlayer())
 	{
+		if (m_fCatch_enabled) {
+			m_fCatch_started = true;
+		}
 		pKiller->m_Kills++;
 		if (pVictim->GetPlayer()->m_Wallshot && g_Config.m_SvWallshot == 1)
 			pKiller->m_Kills += g_Config.m_SvWallshotBonus; //pKiller->m_Multiplier;
@@ -116,7 +120,7 @@ int CGameController_fCatch::OnCharacterDeath(class CCharacter *pVictim, class CP
 		pVictim->GetPlayer()->m_Wallshot = false;
 
 		/* Check if the killer is already killed and in spectator (victim may died through wallshot) */
-		if (pKiller->GetTeam() != TEAM_SPECTATORS && m_fCatch_enabled == true)
+		if (pKiller->GetTeam() != TEAM_SPECTATORS && m_fCatch_started == true)
 		{
 			pVictim->GetPlayer()->m_CaughtBy = pKiller->GetCID();
 			pVictim->GetPlayer()->SetTeamDirect(TEAM_SPECTATORS);
@@ -177,6 +181,7 @@ void CGameController_fCatch::StartRound()
 {
 	IGameController::StartRound();
 	m_fCatch_enabled = false;
+	m_fCatch_started = false;
 	for (int i = 0; i < MAX_CLIENTS; i++)
 	{
 		if (GameServer()->m_apPlayers[i])

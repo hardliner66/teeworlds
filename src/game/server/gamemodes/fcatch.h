@@ -12,6 +12,7 @@ class CGameController_fCatch: public IGameController
 	int m_PlayerCount;
 	int m_ActivePlayerCount;
 	bool m_fCatch_enabled;
+	bool m_fCatch_started;
 
 	bool ShouldShowCapturesInsteadOfKills();
 
