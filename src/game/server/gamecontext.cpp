@@ -613,8 +613,10 @@ void CGameContext::OnClientEnter(int ClientID)
 		if (IsClientReady(i))
 			Num++;
 	}
-	if (Num < 3)
+	if (Num == 2 && g_Config.m_SvAutoIdm != 1 && g_Config.m_SvfCatchShowCapturedPlayers == 0)
+	{
 		m_pController->EndRound();
+	}
 
 	if (g_Config.m_SvAllowJoin == 1)
 	{
