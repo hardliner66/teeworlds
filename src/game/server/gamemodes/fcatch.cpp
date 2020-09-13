@@ -66,6 +66,15 @@ void CGameController_fCatch::DoWincheck()
 			}
 		}
 
+		if (m_fCatch_enabled && m_fCatch_started) {
+			if (Players == 1) {
+				EndRound();
+			} else if (Players == 0) {
+				m_fCatch_enabled = false;
+				m_fCatch_started = false;
+			}
+		}
+
 		if (Players == 1)
 		{
 			//Do nothing
