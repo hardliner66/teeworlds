@@ -118,8 +118,8 @@ MACRO_CONFIG_INT(SvKillPenalty, sv_kill_penalty, 5, 0, 50, CFGFLAG_SERVER, "The 
 
 MACRO_CONFIG_INT(SvWallshot, sv_wallshot, 1, 0, 2, CFGFLAG_SERVER, "0 - Off; 1 - Bonus Points; 2 - Strict")
 MACRO_CONFIG_INT(SvWallshotBonus, sv_wallshot_bonus, 1, 1, 50, CFGFLAG_SERVER, "How many Bonus Points")
-MACRO_CONFIG_INT(SvAutoIdm, sv_auto_idm, 0, 0, 1, CFGFLAG_SERVER, "1 - switch back to idm if playercount below sv_fcatch_min_players")
-MACRO_CONFIG_INT(SvfCatchMinPlayers, sv_min_players, 4, 1, 17, CFGFLAG_SERVER, "How many active Players, before Gamemode changes from iDM to fCatch; 17 = only iDM")
+MACRO_CONFIG_INT(SvAutoIdm, sv_auto_idm, 1, 0, 1, CFGFLAG_SERVER, "1 - switch back to idm if playercount below sv_fcatch_min_players")
+MACRO_CONFIG_INT(SvfCatchMinPlayers, sv_min_players, 4, 1, MAX_CLIENTS + 1, CFGFLAG_SERVER, "How many active Players, before Gamemode changes from iDM to fCatch; 17 = only iDM")
 MACRO_CONFIG_INT(SvfCatchMode, sv_plus_mode, 2, 0, 2, CFGFLAG_SERVER, "0 - off; 1 - simple; 2 - strict")
 MACRO_CONFIG_INT(SvfCatchFreezeTime, sv_plus_freeze_time, 4, 1, 10, CFGFLAG_SERVER, "Freeze Time when hit")
 MACRO_CONFIG_INT(SvfCatchMinDiff, sv_plus_min_height_diff, 10, 1, 50, CFGFLAG_SERVER, "Minimum height difference before player can kill")

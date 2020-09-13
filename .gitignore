@@ -10,6 +10,8 @@ freetype.dll
 autoexec.cfg
 Info.plist
 
+log.txt
+
 crapnet*
 dilate*
 fake_server*

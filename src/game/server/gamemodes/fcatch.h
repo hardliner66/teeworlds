@@ -13,6 +13,8 @@ class CGameController_fCatch: public IGameController
 	int m_ActivePlayerCount;
 	bool m_fCatch_enabled;
 
+	bool ShouldShowCapturesInsteadOfKills();
+
 public:
 	CGameController_fCatch(class CGameContext *pGameServer);
 	virtual void Tick();

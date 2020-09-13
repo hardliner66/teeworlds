@@ -9,8 +9,7 @@
 #include <game/server/player.h>
 #include "fcatch.h"
 
-CGameController_fCatch::CGameController_fCatch(class CGameContext *pGameServer) :
-		IGameController(pGameServer)
+CGameController_fCatch::CGameController_fCatch(class CGameContext *pGameServer) : IGameController(pGameServer)
 {
 	m_pGameType = "fCatch";
 	m_PlayerCount = 0;
@@ -21,24 +20,24 @@ CGameController_fCatch::CGameController_fCatch(class CGameContext *pGameServer) 
 void CGameController_fCatch::Tick()
 {
 	IGameController::Tick();
-	if(m_GameOverTick == -1)
+	if (m_GameOverTick == -1)
 		CalcPlayerColor();
 }
 
 void CGameController_fCatch::DoWincheck()
 {
-	if(m_GameOverTick == -1)
+	if (m_GameOverTick == -1)
 	{
 		int Players = 0, Players_Spec = 0, Players_SpecExplicit = 0;
 
-		for(int i = 0; i < MAX_CLIENTS; i++)
+		for (int i = 0; i < MAX_CLIENTS; i++)
 		{
-			if(GameServer()->m_apPlayers[i])
+			if (GameServer()->m_apPlayers[i])
 			{
 				Players++;
-				if(GameServer()->m_apPlayers[i]->GetTeam() == TEAM_SPECTATORS)
+				if (GameServer()->m_apPlayers[i]->GetTeam() == TEAM_SPECTATORS)
 					Players_Spec++;
-				if(GameServer()->m_apPlayers[i]->m_SpecExplicit == 1)
+				if (GameServer()->m_apPlayers[i]->m_SpecExplicit == 1)
 					Players_SpecExplicit++;
 			}
 		}
@@ -46,18 +45,18 @@ void CGameController_fCatch::DoWincheck()
 		m_PlayerCount = Players;
 		m_ActivePlayerCount = Players - Players_Spec;
 
-		if(m_ActivePlayerCount >= g_Config.m_SvfCatchMinPlayers)
+		if (m_ActivePlayerCount >= g_Config.m_SvfCatchMinPlayers)
 		{
 			m_fCatch_enabled = true;
 		}
 		else if (g_Config.m_SvAutoIdm == 1)
 		{
 			m_fCatch_enabled = false;
-			for(int i = 0; i < MAX_CLIENTS; i++)
+			for (int i = 0; i < MAX_CLIENTS; i++)
 			{
-				if(GameServer()->m_apPlayers[i])
+				if (GameServer()->m_apPlayers[i])
 				{
-					if(GameServer()->m_apPlayers[i]->m_CaughtBy != CPlayer::FCATCH_NOT_CAUGHT)
+					if (GameServer()->m_apPlayers[i]->m_CaughtBy != CPlayer::FCATCH_NOT_CAUGHT)
 					{
 						GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::FCATCH_NOT_CAUGHT;
 						GameServer()->m_apPlayers[i]->SetTeamDirect(GameServer()->m_pController->ClampTeam(1));
@@ -66,15 +65,15 @@ void CGameController_fCatch::DoWincheck()
 			}
 		}
 
-		if(Players == 1)
+		if (Players == 1)
 		{
 			//Do nothing
 		}
-		else if((Players - Players_Spec == 1) && (Players != Players_Spec) && (Players - Players_SpecExplicit != 1))
+		else if ((Players - Players_Spec == 1) && (Players != Players_Spec) && (Players - Players_SpecExplicit != 1))
 		{
-			for(int i = 0; i < MAX_CLIENTS; i++)
+			for (int i = 0; i < MAX_CLIENTS; i++)
 			{
-				if(GameServer()->m_apPlayers[i] && GameServer()->m_apPlayers[i]->GetTeam() != TEAM_SPECTATORS)
+				if (GameServer()->m_apPlayers[i] && GameServer()->m_apPlayers[i]->GetTeam() != TEAM_SPECTATORS)
 					GameServer()->m_apPlayers[i]->m_Score += g_Config.m_SvBonus;
 			}
 			EndRound();
@@ -84,34 +83,40 @@ void CGameController_fCatch::DoWincheck()
 	}
 }
 
+bool CGameController_fCatch::ShouldShowCapturesInsteadOfKills() {
+	return !(g_Config.m_SvfCatchShowCapturedPlayers == 0 || (g_Config.m_SvAutoIdm == 1 && m_ActivePlayerCount < g_Config.m_SvfCatchMinPlayers));
+}
+
 int CGameController_fCatch::OnCharacterDeath(class CCharacter *pVictim, class CPlayer *pKiller, int WeaponID)
 {
-	if(!pKiller)
+	if (!pKiller)
 		return 0;
 
-  if (g_Config.m_SvfCatchShowCapturedPlayers == 1)
-    pVictim->GetPlayer()->m_Score = 0;
+	if (ShouldShowCapturesInsteadOfKills())
+	{
+		pVictim->GetPlayer()->m_Score = 0;
+	}
 
-  int VictimID = pVictim->GetPlayer()->GetCID();
+	int VictimID = pVictim->GetPlayer()->GetCID();
 
-	if(pKiller != pVictim->GetPlayer())
+	if (pKiller != pVictim->GetPlayer())
 	{
 		pKiller->m_Kills++;
-		if(pVictim->GetPlayer()->m_Wallshot && g_Config.m_SvWallshot == 1)
+		if (pVictim->GetPlayer()->m_Wallshot && g_Config.m_SvWallshot == 1)
 			pKiller->m_Kills += g_Config.m_SvWallshotBonus; //pKiller->m_Multiplier;
 
 		pVictim->GetPlayer()->m_Deaths++;
-		if(pVictim->GetPlayer()->m_Wallshot && g_Config.m_SvWallshot == 1)
+		if (pVictim->GetPlayer()->m_Wallshot && g_Config.m_SvWallshot == 1)
 			pVictim->GetPlayer()->m_Deaths += g_Config.m_SvWallshotBonus; //pKiller->m_Multiplier;
 
 		pKiller->m_Score++;
-		if(pVictim->GetPlayer()->m_Wallshot && g_Config.m_SvWallshot == 1)
+		if (pVictim->GetPlayer()->m_Wallshot && g_Config.m_SvWallshot == 1)
 			pKiller->m_Score += g_Config.m_SvWallshotBonus; //pKiller->m_Multiplier;
 
-		pVictim->GetPlayer()->m_Wallshot=false;
+		pVictim->GetPlayer()->m_Wallshot = false;
 
 		/* Check if the killer is already killed and in spectator (victim may died through wallshot) */
-		if(pKiller->GetTeam() != TEAM_SPECTATORS && m_fCatch_enabled == true)
+		if (pKiller->GetTeam() != TEAM_SPECTATORS && m_fCatch_enabled == true)
 		{
 			pVictim->GetPlayer()->m_CaughtBy = pKiller->GetCID();
 			pVictim->GetPlayer()->SetTeamDirect(TEAM_SPECTATORS);
@@ -126,24 +131,24 @@ int CGameController_fCatch::OnCharacterDeath(class CCharacter *pVictim, class CP
 	else
 	{
 		//Punish selfkill/death
-    if (g_Config.m_SvfCatchShowCapturedPlayers == 0)
-    {
-		  if(WeaponID == WEAPON_SELF || WeaponID == WEAPON_WORLD)
-			  pVictim->GetPlayer()->m_Score -= g_Config.m_SvKillPenalty;
-    }
+		if (!ShouldShowCapturesInsteadOfKills())
+		{
+			if (WeaponID == WEAPON_SELF || WeaponID == WEAPON_WORLD)
+				pVictim->GetPlayer()->m_Score -= g_Config.m_SvKillPenalty;
+		}
 	}
 
-	for(int i = 0; i < MAX_CLIENTS; i++)
+	for (int i = 0; i < MAX_CLIENTS; i++)
 	{
-		if(GameServer()->m_apPlayers[i])
+		if (GameServer()->m_apPlayers[i])
 		{
-			if(GameServer()->m_apPlayers[i]->m_CaughtBy == VictimID)
+			if (GameServer()->m_apPlayers[i]->m_CaughtBy == VictimID)
 			{
 				GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::FCATCH_NOT_CAUGHT;
 				GameServer()->m_apPlayers[i]->SetTeamDirect(GameServer()->m_pController->ClampTeam(1));
 
 				//if(pKiller != pVictim->GetPlayer())
-					//pKiller->m_Score++;
+				//pKiller->m_Score++;
 			}
 		}
 	}
@@ -156,11 +161,11 @@ int CGameController_fCatch::OnCharacterDeath(class CCharacter *pVictim, class CP
 
 void CGameController_fCatch::OnPlayerInfoChange(class CPlayer *pP)
 {
-	if(g_Config.m_SvColorIndicator)
+	if (g_Config.m_SvColorIndicator)
 	{
 		int Num = 161;
-		for(int i = 0; i < MAX_CLIENTS; i++)
-			if(GameServer()->m_apPlayers[i] && GameServer()->m_apPlayers[i]->m_CaughtBy == pP->GetCID())
+		for (int i = 0; i < MAX_CLIENTS; i++)
+			if (GameServer()->m_apPlayers[i] && GameServer()->m_apPlayers[i]->m_CaughtBy == pP->GetCID())
 				Num -= 10;
 		pP->m_TeeInfos.m_ColorBody = Num * 0x010000 + 0xff00;
 		pP->m_TeeInfos.m_ColorFeet = Num * 0x010000 + 0xff00;
@@ -172,9 +177,9 @@ void CGameController_fCatch::StartRound()
 {
 	IGameController::StartRound();
 	m_fCatch_enabled = false;
-	for(int i = 0; i < MAX_CLIENTS; i++)
+	for (int i = 0; i < MAX_CLIENTS; i++)
 	{
-		if(GameServer()->m_apPlayers[i])
+		if (GameServer()->m_apPlayers[i])
 		{
 			GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::FCATCH_NOT_CAUGHT;
 			GameServer()->m_apPlayers[i]->m_Kills = 0;
@@ -200,12 +205,12 @@ void CGameController_fCatch::OnCharacterSpawn(class CCharacter *pChr)
 
 void CGameController_fCatch::EndRound()
 {
-	for(int i = 0; i < MAX_CLIENTS; i++)
+	for (int i = 0; i < MAX_CLIENTS; i++)
 	{
-		if(GameServer()->m_apPlayers[i])
+		if (GameServer()->m_apPlayers[i])
 		{
 
-			if(GameServer()->m_apPlayers[i]->m_SpecExplicit == 0)
+			if (GameServer()->m_apPlayers[i]->m_SpecExplicit == 0)
 			{
 				GameServer()->m_apPlayers[i]->SetTeamDirect(GameServer()->m_pController->ClampTeam(1));
 
@@ -213,10 +218,10 @@ void CGameController_fCatch::EndRound()
 				str_format(aBuf, sizeof(aBuf), "Kills: %d | Deaths: %d", GameServer()->m_apPlayers[i]->m_Kills, GameServer()->m_apPlayers[i]->m_Deaths);
 				GameServer()->SendChatTarget(i, aBuf);
 
-				if(GameServer()->m_apPlayers[i]->m_TicksSpec != 0 || GameServer()->m_apPlayers[i]->m_TicksIngame != 0)
+				if (GameServer()->m_apPlayers[i]->m_TicksSpec != 0 || GameServer()->m_apPlayers[i]->m_TicksIngame != 0)
 				{
 					double TimeInSpec = (GameServer()->m_apPlayers[i]->m_TicksSpec * 100.0) / (GameServer()->m_apPlayers[i]->m_TicksIngame + GameServer()->m_apPlayers[i]->m_TicksSpec);
-					str_format(aBuf, sizeof(aBuf), "Spec: %.2f%% | Ingame: %.2f%%", (double) TimeInSpec, (double) (100.0 - TimeInSpec));
+					str_format(aBuf, sizeof(aBuf), "Spec: %.2f%% | Ingame: %.2f%%", (double)TimeInSpec, (double)(100.0 - TimeInSpec));
 					GameServer()->SendChatTarget(i, aBuf);
 				}
 				GameServer()->m_apPlayers[i]->m_CaughtBy = CPlayer::FCATCH_NOT_CAUGHT; //Set all players in server as non-caught
@@ -224,7 +229,7 @@ void CGameController_fCatch::EndRound()
 		}
 	}
 
-	if(m_Warmup) // game can't end when we are running warmup
+	if (m_Warmup) // game can't end when we are running warmup
 		return;
 
 	GameServer()->m_World.m_Paused = true;
@@ -234,18 +239,18 @@ void CGameController_fCatch::EndRound()
 
 bool CGameController_fCatch::CanChangeTeam(CPlayer *pPlayer, int JoinTeam)
 {
-	if(pPlayer->m_CaughtBy >= 0)
+	if (pPlayer->m_CaughtBy >= 0)
 		return false;
 	return true;
 }
 
 bool CGameController_fCatch::OnEntity(int Index, vec2 Pos)
 {
-	if(Index == ENTITY_SPAWN)
+	if (Index == ENTITY_SPAWN)
 		m_aaSpawnPoints[0][m_aNumSpawnPoints[0]++] = Pos;
-	else if(Index == ENTITY_SPAWN_RED)
+	else if (Index == ENTITY_SPAWN_RED)
 		m_aaSpawnPoints[1][m_aNumSpawnPoints[1]++] = Pos;
-	else if(Index == ENTITY_SPAWN_BLUE)
+	else if (Index == ENTITY_SPAWN_BLUE)
 		m_aaSpawnPoints[2][m_aNumSpawnPoints[2]++] = Pos;
 
 	return false;
@@ -253,12 +258,12 @@ bool CGameController_fCatch::OnEntity(int Index, vec2 Pos)
 
 void CGameController_fCatch::CalcPlayerColor()
 {
-	for(int i = 0; i < MAX_CLIENTS; i++)
+	for (int i = 0; i < MAX_CLIENTS; i++)
 	{
 		CPlayer *pP = GameServer()->m_apPlayers[i];
-		if(!pP)
+		if (!pP)
 			continue;
-		if(pP->GetTeam() != TEAM_SPECTATORS)
+		if (pP->GetTeam() != TEAM_SPECTATORS)
 			OnPlayerInfoChange(pP);
 	}
 }
