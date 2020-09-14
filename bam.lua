@@ -143,7 +143,7 @@ end
 function build(settings)
 	-- apply compiler settings
 	config.compiler:Apply(settings)
-	
+
 	--settings.objdir = Path("objs")
 	settings.cc.Output = Intermediate_Output
 
@@ -178,7 +178,7 @@ function build(settings)
 		else
 			settings.link.libs:Add("pthread")
 		end
-		
+
 		if platform == "solaris" then
 		    settings.link.flags:Add("-lsocket")
 		    settings.link.flags:Add("-lnsl")
@@ -239,7 +239,7 @@ function build(settings)
 	-- apply freetype settings
 	config.freetype:Apply(client_settings)
 
-	engine = Compile(engine_settings, Collect("src/engine/shared/*.cpp", "src/base/*.c"))
+	engine = Compile(engine_settings, Collect("src/engine/shared/*.cpp", "src/base/*.c", "src/base/unicode/*.c"))
 	client = Compile(client_settings, Collect("src/engine/client/*.cpp"))
 	server = Compile(server_settings, Collect("src/engine/server/*.cpp"))
 
@@ -343,7 +343,7 @@ if platform == "macosx" then
 		release_settings_x86.cc.flags:Add("-arch i386")
 		release_settings_x86.link.flags:Add("-arch i386")
 		release_settings_x86.cc.defines:Add("CONF_RELEASE")
-	
+
 		x86_d = build(debug_settings_x86)
 		x86_r = build(release_settings_x86)
 	end
@@ -368,7 +368,7 @@ if platform == "macosx" then
 	end
 
 	DefaultTarget("game_debug_x86")
-	
+
 	if config.macosxppc.value then
 		if arch == "ia32" then
 			PseudoTarget("release", ppc_r, x86_r)
