@@ -36,7 +36,9 @@ bool CLaser::HitCharacter(vec2 From, vec2 To)
 	m_Pos = At;
 	m_Energy = -1;
 
-  if (GameServer()->m_pController->m_pGameType == "iLMS")
+	auto game_type = GameServer()->m_pController->m_pGameType;
+
+  if (str_find_nocase(game_type, "iLMS") == game_type)
   {
     m_CanKill = true;
     TryKill(pHit);
