@@ -5,6 +5,9 @@
 
 #include <engine/server.h>
 
+#include <base/tl/array.h>
+
+#include "name_ban.h"
 
 class CSnapIDPool
 {
@@ -157,6 +160,8 @@ public:
 	CDemoRecorder m_DemoRecorder;
 	CRegister m_Register;
 	CMapChecker m_MapChecker;
+
+	array<CNameBan> m_aNameBans;
 
 	CServer();
 
