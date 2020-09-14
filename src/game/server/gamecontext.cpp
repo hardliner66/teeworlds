@@ -27,7 +27,7 @@ void CGameContext::Construct(int Resetting)
 	m_Resetting = 0;
 	m_pServer = 0;
 
-	if (m_LastMapVote == NULL)
+	if (m_LastMapVote == 0)
 		time(&m_LastMapVote);
 
 	for (int i = 0; i < MAX_CLIENTS; i++)
@@ -56,7 +56,7 @@ CGameContext::CGameContext(int Resetting)
 
 CGameContext::CGameContext()
 {
-	m_LastMapVote = NULL;
+	m_LastMapVote = 0;
 
 	Construct(NO_RESET);
 }
@@ -300,7 +300,7 @@ void CGameContext::StartVote(const char *pDesc, const char *pCommand, const char
 	bool doVote = true;
 	bool dp = false;
 
-	if (m_LastMapVote == NULL)
+	if (m_LastMapVote == 0)
 	{
 		Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", "resetting time");
 		time(&m_LastMapVote);
