@@ -96,6 +96,31 @@ public:
 		int m_Max;
 	} m_Latency;
 
+	int m_ChatTicks;
+	char m_aOldChatMsg[256];
+	int m_OldChatMsgCount;
+	int m_LastPMReceivedFrom;
+
+	int m_SetEmoteType;
+	int m_SetEmoteStop;
+
+	struct Stats
+	{
+		int m_Shots[NUM_WEAPONS];
+		int m_TotalShots;
+		int m_Kills;
+		int m_Deaths;
+		int m_Hits;
+		int m_Captures;
+		int m_LostFlags;
+		double m_FastestCapture;
+	} m_Stats;
+	bool m_KeepWeapon[NUM_WEAPONS-1];
+	bool m_KeepAward;
+	int m_Spree;
+	bool m_GotAward;
+
+	bool m_FreezeOnSpawn;
 private:
 	CCharacter *m_pCharacter;
 	CGameContext *m_pGameServer;

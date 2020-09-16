@@ -12,10 +12,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#if defined(CONF_WEBSOCKETS)
-	#include "engine/shared/websockets.h"
-#endif
-
 #if defined(CONF_FAMILY_UNIX)
 #include <signal.h>
 #include <sys/time.h>
@@ -2849,6 +2845,28 @@ void net_stats(NETSTATS *stats_inout)
 }
 
 int str_isspace(char c) { return c == ' ' || c == '\n' || c == '\t'; }
+
+
+
+#include "UTF8-letter-cases.h"
+
+int str_isupper(int c)
+{
+	int Entrys = sizeof(aaUTF8CapitalLetters)/(3*sizeof(int)), i;
+	for(i = 0; i < Entrys; i++)
+		if(c >= aaUTF8CapitalLetters[i][0] && c <= aaUTF8CapitalLetters[i][1])
+			return 1;
+	return 0;
+}
+
+int str_islower(int c)
+{
+	int Entrys = sizeof(aaUTF8LowerLetters)/(3*sizeof(int)), i;
+	for(i = 0; i < Entrys; i++)
+		if(c >= aaUTF8LowerLetters[i][0] && c <= aaUTF8LowerLetters[i][1])
+			return 1;
+	return 0;
+}
 
 char str_uppercase(char c)
 {

@@ -6,9 +6,10 @@
 #include <game/server/player.h>
 #include "tdm.h"
 
-CGameControllerTDM::CGameControllerTDM(class CGameContext *pGameServer) : IGameController(pGameServer)
+CGameControllerTDM::CGameControllerTDM(class CGameContext *pGameServer, int TypeFlags) : IGameController(pGameServer)
 {
-	m_pGameType = "TDM";
+	m_Flags = TypeFlags;
+	m_pGameType = (IsInstagib()) ? "iTDM+" : "TDM+";
 	m_GameFlags = GAMEFLAG_TEAMS;
 }
 

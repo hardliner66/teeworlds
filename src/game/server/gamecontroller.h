@@ -54,7 +54,6 @@ protected:
 	int m_aTeamscore[2];
 
 	int m_Warmup;
-	int m_UnpauseTimer;
 	int m_RoundCount;
 
 	int m_GameFlags;
@@ -73,7 +72,6 @@ public:
 	virtual void DoWincheck();
 
 	void DoWarmup(int Seconds);
-	void TogglePause();
 
 	void StartRound();
 	void EndRound();
@@ -144,6 +142,20 @@ public:
 	int ClampTeam(int Team);
 
 	virtual void PostReset();
+
+	enum {
+		GAMETYPE_INSTAGIB = 1<<0,
+		GAMETYPE_VANILLA = 1<<1,
+		GAMETYPE_GCTF = 1<<2,
+		GAMETYPE_IFREEZE = 1<<3
+	};
+	int m_Flags;
+
+	virtual bool IsInstagib() { return m_Flags&GAMETYPE_INSTAGIB; }
+	virtual bool IsIFreeze() { return m_Flags&GAMETYPE_IFREEZE; }
+	int IsWarmup() { return m_Warmup; }
+	int m_FakeWarmup;
+	void SaveStats();
 };
 
 #endif

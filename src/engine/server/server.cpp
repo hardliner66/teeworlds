@@ -447,7 +447,7 @@ void CServer::SetRconCID(int ClientID)
 	m_RconClientID = ClientID;
 }
 
-bool CServer::IsAuthed(int ClientID)
+int CServer::IsAuthed(int ClientID)
 {
 	return m_aClients[ClientID].m_Authed;
 }
@@ -1611,6 +1611,21 @@ void CServer::ConchainConsoleOutputLevelUpdate(IConsole::IResult *pResult, void 
 	}
 }
 
+void CServer::ConWhois(IConsole::IResult *pResult, void *pUser)
+{
+	CServer* pServer = (CServer *)pUser;
+	char aBuf[128];
+	for(int i = 0; i < MAX_CLIENTS; i++)
+	{
+		if(pServer->m_aClients[i].m_State == CServer::CClient::STATE_EMPTY || pServer->m_aClients[i].m_Authed == CServer::AUTHED_NO)
+			continue;
+
+		bool Admin = pServer->m_aClients[i].m_Authed == CServer::AUTHED_ADMIN;
+		str_format(aBuf, sizeof(aBuf), "ID %d: %s: %s", i, pServer->ClientName(i), (Admin) ? "Admin" : "Moderator");
+		pServer->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "Server", aBuf);
+	}
+}
+
 void CServer::RegisterCommands()
 {
 	m_pConsole = Kernel()->RequestInterface<IConsole>();
@@ -1628,6 +1643,7 @@ void CServer::RegisterCommands()
 	Console()->Register("stoprecord", "", CFGFLAG_SERVER, ConStopRecord, this, "Stop recording");
 
 	Console()->Register("reload", "", CFGFLAG_SERVER, ConMapReload, this, "Reload the map");
+	Console()->Register("whois", "", CFGFLAG_SERVER, ConWhois, this, "Show which player is authed");
 
 	Console()->Chain("sv_name", ConchainSpecialInfoupdate, this);
 	Console()->Chain("password", ConchainSpecialInfoupdate, this);

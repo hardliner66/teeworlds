@@ -184,7 +184,7 @@ public:
 	int Init();
 
 	void SetRconCID(int ClientID);
-	bool IsAuthed(int ClientID);
+	int IsAuthed(int ClientID);
 	int GetClientInfo(int ClientID, CClientInfo *pInfo);
 	void GetClientAddr(int ClientID, char *pAddrStr, int Size);
 	const char *ClientName(int ClientID);
@@ -234,6 +234,8 @@ public:
 	static void ConchainMaxclientsperipUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	static void ConchainModCommandUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	static void ConchainConsoleOutputLevelUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
+	//
+	static void ConWhois(IConsole::IResult *pResult, void *pUser);
 
 	void RegisterCommands();
 

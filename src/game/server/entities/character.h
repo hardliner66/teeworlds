@@ -60,9 +60,20 @@ public:
 	void GiveNinja();
 
 	void SetEmote(int Emote, int Tick);
+	void SetEmoteFix(int Emote, int Tick);
 
 	bool IsAlive() const { return m_Alive; }
 	class CPlayer *GetPlayer() { return m_pPlayer; }
+
+	void Freeze(int);
+	int Frozen();
+	CCharacterCore* GetCore() {return &m_Core;}
+	void AddSpree();
+	void EndSpree(int Killer);
+	void KillChar();
+	void Melt(int MelterID);
+	bool TakeWeapon(int Weapon);
+	bool Spawnprotected();
 
 private:
 	// player controlling this character
@@ -131,6 +142,15 @@ private:
 	CCharacterCore m_SendCore; // core that we should send
 	CCharacterCore m_ReckoningCore; // the dead reckoning core
 
+	int m_FreezeTicks;
+	int m_MeltTicks;
+	bool m_DeepFreeze;
+	int m_SpawnProtectTick;
+	//
+	int Anticamper();
+	bool m_SentCampMsg;
+	int m_CampTick;
+	vec2 m_CampPos;
 };
 
 #endif

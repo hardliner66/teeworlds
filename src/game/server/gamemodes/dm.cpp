@@ -3,10 +3,11 @@
 #include "dm.h"
 
 
-CGameControllerDM::CGameControllerDM(class CGameContext *pGameServer)
+CGameControllerDM::CGameControllerDM(class CGameContext *pGameServer, int TypeFlags)
 : IGameController(pGameServer)
 {
-	m_pGameType = "DM";
+	m_Flags = TypeFlags;
+	m_pGameType = (IsInstagib()) ? "iDM+" : "DM+";
 }
 
 void CGameControllerDM::Tick()

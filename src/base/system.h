@@ -1765,6 +1765,9 @@ char str_uppercase(char c);
 int str_isallnum(const char *str);
 unsigned str_quickhash(const char *str);
 
+int str_isupper(int c);
+int str_islower(int c);
+
 struct SKELETON;
 void str_utf8_skeleton_begin(struct SKELETON *skel, const char *str);
 int str_utf8_skeleton_next(struct SKELETON *skel);
