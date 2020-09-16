@@ -269,7 +269,7 @@ function build(settings)
 		engine, client, game_editor, md5, zlib, pnglite, wavpack,
 		client_link_other)
 
-	server_exe = Link(server_settings, "teeworlds_srv", engine, server,
+	server_exe = Link(server_settings, "instagib_srv", engine, server,
 		game_shared, game_server, md5, zlib, server_link_other)
 
 	serverlaunch = {}
