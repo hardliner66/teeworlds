@@ -635,8 +635,12 @@ void CCharacter::Tick()
 	{
 		// unfreeze player/automelt
 		m_FreezeTicks--;
-		if(m_FreezeTicks <= 0)
+		if(m_FreezeTicks <= 0) {
 			Melt(-1);
+
+			// make player move again
+			GameServer()->SendTuningParams(m_pPlayer->GetCID());
+		}
 
 		//Melting
 		if(GameServer()->m_pController->IsIFreeze())
@@ -1117,6 +1121,9 @@ void CCharacter::Freeze(int Secs)
 	m_ActiveWeapon = WEAPON_NINJA;
 	ResetInput();
 	GameServer()->CreateSound(m_Pos, SOUND_PLAYER_PAIN_LONG);
+
+	// disable player moving, smooth freeze
+	GameServer()->SendFreezeTuningParams(m_pPlayer->GetCID());
 }
 
 int CCharacter::Frozen()

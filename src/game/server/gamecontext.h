@@ -175,6 +175,7 @@ public:
 	//
 	void CheckPureTuning();
 	void SendTuningParams(int ClientID);
+	void SendFreezeTuningParams(int ClientID);
 
 	//
 	void SwapTeams();

@@ -431,6 +431,27 @@ void CGameContext::SendTuningParams(int ClientID)
 	Server()->SendMsg(&Msg, MSGFLAG_VITAL, ClientID);
 }
 
+void SendFreezeTuningParams(int ClientID)
+{
+	static CTuningParams FakeTuning;
+
+	FakeTuning.m_GroundControlSpeed = 0;
+	FakeTuning.m_GroundJumpImpulse = 0;
+	FakeTuning.m_GroundControlAccel = 0;
+	FakeTuning.m_AirControlSpeed = 0;
+	FakeTuning.m_AirJumpImpulse = 0;
+	FakeTuning.m_AirControlAccel = 0;
+	FakeTuning.m_HookDragSpeed = 0;
+	FakeTuning.m_HookDragAccel = 0;
+	FakeTuning.m_HookFireSpeed = 0;
+
+	CMsgPacker Msg(NETMSGTYPE_SV_TUNEPARAMS);
+	int *pParams = (int *)&FakeTuning;
+	for(unsigned i = 0; i < sizeof(FakeTuning)/sizeof(int); i++)
+		Msg.AddInt(pParams[i]);
+	Server()->SendMsg(&Msg, MSGFLAG_VITAL, ClientID);
+}
+
 void CGameContext::SwapTeams()
 {
 	if(!m_pController->IsTeamplay())
