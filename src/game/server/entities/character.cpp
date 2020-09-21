@@ -597,6 +597,8 @@ void CCharacter::Tick()
 			{
 				m_ActiveWeapon = m_LastWeapon;
 				GameServer()->SendBroadcast("", m_pPlayer->GetCID());
+
+				GameServer()->SendTuningParams(m_pPlayer->GetCID());
 			}
 		m_FreezeTicks--;
 	}
@@ -919,4 +921,6 @@ void CCharacter::Freeze(int Ticks)
 	m_ActiveWeapon = WEAPON_NINJA;
 	ResetInput();
 	GameServer()->CreateSound(m_Pos, SOUND_PLAYER_PAIN_LONG);
+
+	GameServer()->SendFreezeTuningParams(m_pPlayer->GetCID());
 }
