@@ -598,6 +598,7 @@ void CCharacter::Tick()
 				m_ActiveWeapon = m_LastWeapon;
 				GameServer()->SendBroadcast("", m_pPlayer->GetCID());
 
+				// make player move again
 				GameServer()->SendTuningParams(m_pPlayer->GetCID());
 			}
 		m_FreezeTicks--;
@@ -922,5 +923,6 @@ void CCharacter::Freeze(int Ticks)
 	ResetInput();
 	GameServer()->CreateSound(m_Pos, SOUND_PLAYER_PAIN_LONG);
 
+	// disable player moving, smooth freeze
 	GameServer()->SendFreezeTuningParams(m_pPlayer->GetCID());
 }
