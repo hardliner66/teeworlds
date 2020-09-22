@@ -465,6 +465,7 @@ void CGameContext::SendFreezeTuningParams(int ClientID)
 	FakeTuning.m_HookDragSpeed = 0;
 	FakeTuning.m_HookDragAccel = 0;
 	FakeTuning.m_HookFireSpeed = 0;
+	FakeTuning.m_HookLength = 0;
 
 	CMsgPacker Msg(NETMSGTYPE_SV_TUNEPARAMS);
 	int *pParams = (int *)&FakeTuning;
