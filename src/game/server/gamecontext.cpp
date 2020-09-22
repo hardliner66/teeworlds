@@ -431,7 +431,7 @@ void CGameContext::SendTuningParams(int ClientID)
 	Server()->SendMsg(&Msg, MSGFLAG_VITAL, ClientID);
 }
 
-void SendFreezeTuningParams(int ClientID)
+void CGameContext::SendFreezeTuningParams(int ClientID)
 {
 	static CTuningParams FakeTuning;
 
