@@ -11,7 +11,11 @@
 
 CGameController_fCatch::CGameController_fCatch(class CGameContext *pGameServer) : IGameController(pGameServer)
 {
-	m_pGameType = "fCatch";
+	if (g_Config.m_SvfCatchMode == 0) {
+		m_pGameType = "zCatch";
+	} else {
+		m_pGameType = "fCatch";
+	}
 	m_PlayerCount = 0;
 	m_ActivePlayerCount = 0;
 	m_fCatch_enabled = false;
