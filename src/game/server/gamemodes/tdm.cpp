@@ -9,7 +9,11 @@
 CGameControllerTDM::CGameControllerTDM(class CGameContext *pGameServer, int TypeFlags) : IGameController(pGameServer)
 {
 	m_Flags = TypeFlags;
-	m_pGameType = (IsInstagib()) ? "iTDM+|b" : "TDM+|b";
+	if (g_Config.m_SvBotsEnabled) {
+		m_pGameType = (IsInstagib()) ? "iTDM+|b" : "TDM+|b";
+	} else {
+		m_pGameType = (IsInstagib()) ? "iTDM+" : "TDM+";
+	}
 	m_GameFlags = GAMEFLAG_TEAMS;
 }
 

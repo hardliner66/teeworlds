@@ -12,7 +12,11 @@ CGameControllerGCTF::CGameControllerGCTF(class CGameContext *pGameServer, int Ty
 : CGameControllerCTF(pGameServer, TypeFlags)
 {
 	m_Flags = TypeFlags;
-	m_pGameType = "gCTF+";
+	if (g_Config.m_SvBotsEnabled) {
+		m_pGameType = "gCTF+|b";
+	} else {
+		m_pGameType = "gCTF+";
+	}
 }
 
 void CGameControllerGCTF::OnCharacterSpawn(CCharacter* pChr)

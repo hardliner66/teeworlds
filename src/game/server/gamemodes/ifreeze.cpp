@@ -17,6 +17,9 @@
 CGameControllerIFreeze::CGameControllerIFreeze(class CGameContext *pGameServer, int TypeFlags) : CGameControllerTDM(pGameServer, TypeFlags)
 {
 	m_Flags = TypeFlags;
+	if (g_Config.m_SvBotsEnabled) {
+		g_Config.m_SvBotsEnabled = 0;
+	}
 	m_pGameType = "iFreeze+";
 }
 

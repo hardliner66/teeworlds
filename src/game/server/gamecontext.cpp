@@ -1074,7 +1074,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 					(void)m_pController->CheckTeamBalance();
 					pPlayer->m_TeamChangeTick = Server()->Tick();
 				}
-				else {
+				else if (pPlayer->GetTeam() != pMsg->m_Team) {
 					if (g_Config.m_SvBotVsHuman) {
 						char aDesc[VOTE_DESC_LENGTH] = "switch";
 						char aCmd[VOTE_CMD_LENGTH] = "switch";
@@ -2235,6 +2235,9 @@ void CGameContext::DeleteBot(int i) {
 }
 
 bool CGameContext::AddBot(int i, bool UseDropPlayer) {
+	if (!g_Config.m_SvBotsEnabled) {
+		return false;
+	}
 	int StartTeam = g_Config.m_SvTournamentMode ? TEAM_SPECTATORS : m_pController->GetAutoTeam(i);
 	if(StartTeam == TEAM_SPECTATORS)
 		return false;
@@ -2275,6 +2278,9 @@ bool CGameContext::AddBot(int i, bool UseDropPlayer) {
 }
 
 bool CGameContext::ReplacePlayerByBot(int ClientID) {
+	if (!g_Config.m_SvBotsEnabled) {
+		return false;
+	}
 	int BotNumber = 0;
 	int PlayerCount = -1;
 	for(int i = 0 ; i < MAX_CLIENTS ; ++i) {
@@ -2282,7 +2288,7 @@ bool CGameContext::ReplacePlayerByBot(int ClientID) {
 			continue;
 		if(m_apPlayers[i]->m_IsBot)
 			BotNumber++;
-		else
+		else if (m_apPlayers[i]->GetTeam() != TEAM_SPECTATORS)
 			PlayerCount++;
 	}
 	if(!PlayerCount || BotNumber >= g_Config.m_SvBotSlots)
@@ -2300,7 +2306,7 @@ void CGameContext::CheckBotNumber() {
 			continue;
 		if(m_apPlayers[i]->m_IsBot)
 			BotNumber++;
-		else
+		else if (m_apPlayers[i]->GetTeam() != TEAM_SPECTATORS)
 			PlayerCount++;
 	}
 	if(!PlayerCount)
@@ -2309,6 +2315,9 @@ void CGameContext::CheckBotNumber() {
 	int MaxCount = g_Config.m_SvBotSlots;
 	if (g_Config.m_SvBotVsHuman) {
 		MaxCount = PlayerCount;
+	}
+	if (!g_Config.m_SvBotsEnabled) {
+		MaxCount = 0;
 	}
 
 	// Remove bot excedent
