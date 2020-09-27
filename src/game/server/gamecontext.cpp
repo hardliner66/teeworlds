@@ -1065,14 +1065,30 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 			// Switch team on given client and kill/respawn him
 			if(m_pController->CanJoinTeam(pMsg->m_Team, ClientID))
 			{
+				const int team = pPlayer->GetTeam();
 				if(m_pController->CanChangeTeam(pPlayer, pMsg->m_Team))
 				{
-					pPlayer->m_LastSetTeam = Server()->Tick();
-					if(pPlayer->GetTeam() == TEAM_SPECTATORS || pMsg->m_Team == TEAM_SPECTATORS)
-						m_VoteUpdate = true;
-					pPlayer->SetTeam(pMsg->m_Team);
-					(void)m_pController->CheckTeamBalance();
-					pPlayer->m_TeamChangeTick = Server()->Tick();
+					bool do_switch = false;
+					if (g_Config.m_SvBotVsHuman) {
+						if (m_pController->m_PlayerTeamRed && pMsg->m_Team == TEAM_RED) {
+							do_switch = true;
+						}
+						if (!m_pController->m_PlayerTeamRed && pMsg->m_Team == TEAM_BLUE) {
+							do_switch = true;
+						}
+						if (pMsg->m_Team == TEAM_SPECTATORS) {
+							do_switch = true;
+						}
+					}
+
+					if (do_switch) {
+						pPlayer->m_LastSetTeam = Server()->Tick();
+						if(pPlayer->GetTeam() == TEAM_SPECTATORS || pMsg->m_Team == TEAM_SPECTATORS)
+							m_VoteUpdate = true;
+						pPlayer->SetTeam(pMsg->m_Team);
+						(void)m_pController->CheckTeamBalance();
+						pPlayer->m_TeamChangeTick = Server()->Tick();
+					}
 				}
 				else if (pPlayer->GetTeam() != pMsg->m_Team) {
 					if (g_Config.m_SvBotVsHuman) {

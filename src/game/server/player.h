@@ -63,6 +63,7 @@ public:
 	int m_LastChangeInfo;
 	int m_LastEmote;
 	int m_LastKill;
+	int m_SpecExplicit;
 
 	// TODO: clean this up
 	struct
