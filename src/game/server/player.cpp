@@ -3,6 +3,7 @@
 #include <new>
 #include <engine/shared/config.h>
 #include "player.h"
+#include "bot.h"
 
 
 MACRO_ALLOC_POOL_ID_IMPL(CPlayer, MAX_CLIENTS)
@@ -21,6 +22,7 @@ CPlayer::CPlayer(CGameContext *pGameServer, int ClientID, int Team)
 	m_SpectatorID = SPEC_FREEVIEW;
 	m_LastActionTick = Server()->Tick();
 	m_TeamChangeTick = Server()->Tick();
+	m_IsBot = false;
 
 	m_ChatTicks = 0;
 	m_OldChatMsgCount = 0;
@@ -39,6 +41,8 @@ CPlayer::CPlayer(CGameContext *pGameServer, int ClientID, int Team)
 
 CPlayer::~CPlayer()
 {
+	if(m_pBot)
+		delete m_pBot;
 	delete m_pCharacter;
 	m_pCharacter = 0;
 }
@@ -48,8 +52,9 @@ void CPlayer::Tick()
 #ifdef CONF_DEBUG
 	if(!g_Config.m_DbgDummies || m_ClientID < MAX_CLIENTS-g_Config.m_DbgDummies)
 #endif
-	if(!Server()->ClientIngame(m_ClientID))
-		return;
+	if(!m_IsBot)
+		if(!Server()->ClientIngame(m_ClientID))
+			return;
 
 	Server()->SetClientScore(m_ClientID, m_Score);
 
@@ -95,6 +100,8 @@ void CPlayer::Tick()
 			{
 				delete m_pCharacter;
 				m_pCharacter = 0;
+				if(IsBot())
+					m_pBot->OnReset();
 			}
 		}
 		else if(m_Spawning && m_RespawnTick <= Server()->Tick())
@@ -132,8 +139,9 @@ void CPlayer::Snap(int SnappingClient)
 #ifdef CONF_DEBUG
 	if(!g_Config.m_DbgDummies || m_ClientID < MAX_CLIENTS-g_Config.m_DbgDummies)
 #endif
-	if(!Server()->ClientIngame(m_ClientID))
-		return;
+	if(!m_IsBot)
+		if(!Server()->ClientIngame(m_ClientID))
+			return;
 
 	CNetObj_ClientInfo *pClientInfo = static_cast<CNetObj_ClientInfo *>(Server()->SnapNewItem(NETOBJTYPE_CLIENTINFO, m_ClientID, sizeof(CNetObj_ClientInfo)));
 	if(!pClientInfo)
@@ -160,6 +168,8 @@ void CPlayer::Snap(int SnappingClient)
 		return;
 
 	pPlayerInfo->m_Latency = SnappingClient == -1 ? m_Latency.m_Min : GameServer()->m_apPlayers[SnappingClient]->m_aActLatency[m_ClientID];
+	if(m_IsBot)
+		pPlayerInfo->m_Latency = 0;
 	pPlayerInfo->m_Local = 0;
 	pPlayerInfo->m_ClientID = m_ClientID;
 	pPlayerInfo->m_Score = m_Score;
@@ -260,6 +270,8 @@ void CPlayer::KillCharacter(int Weapon)
 		m_pCharacter->Die(m_ClientID, Weapon);
 		delete m_pCharacter;
 		m_pCharacter = 0;
+		if(IsBot())
+			m_pBot->OnReset();
 	}
 }
 
@@ -317,4 +329,9 @@ void CPlayer::TryRespawn()
 	m_pCharacter = new(m_ClientID) CCharacter(&GameServer()->m_World);
 	m_pCharacter->Spawn(this, SpawnPos);
 	GameServer()->CreatePlayerSpawn(SpawnPos);
+}
+
+void CPlayer::SetCID(int ClientID) {
+	if(m_IsBot)
+		m_ClientID = ClientID;
 }

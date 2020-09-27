@@ -44,6 +44,9 @@ public:
 		return SendMsg(&Packer, Flags, ClientID);
 	}
 
+	virtual int NewBot(int ClientID) = 0;
+	virtual int DelBot(int ClientID) = 0;
+
 	virtual void SetClientName(int ClientID, char const *pName) = 0;
 	virtual void SetClientClan(int ClientID, char const *pClan) = 0;
 	virtual void SetClientCountry(int ClientID, int Country) = 0;
@@ -92,6 +95,9 @@ public:
 
 	virtual bool IsClientReady(int ClientID) = 0;
 	virtual bool IsClientPlayer(int ClientID) = 0;
+
+	virtual void DeleteBot(int i) = 0;
+	virtual bool ReplacePlayerByBot(int ClientID) = 0;
 
 	virtual const char *GameType() = 0;
 	virtual const char *Version() = 0;

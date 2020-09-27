@@ -75,6 +75,13 @@ public:
 	bool TakeWeapon(int Weapon);
 	bool Spawnprotected();
 
+
+	// Need for bot (for now)
+	bool CanFire() { return m_ReloadTimer <= 0; }
+	int GetHealth() { return m_Health; }
+	int GetArmor() { return m_Armor; }
+	int GetAmmoCount(int Weapon) { return m_aWeapons[clamp(Weapon, 0,NUM_WEAPONS-1)].m_Ammo; }
+
 private:
 	// player controlling this character
 	class CPlayer *m_pPlayer;

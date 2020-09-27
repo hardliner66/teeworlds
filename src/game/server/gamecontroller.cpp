@@ -555,6 +555,9 @@ void IGameController::Tick()
 					break;
 			}
 		#endif
+			// Preserve bot
+			if(GameServer()->m_apPlayers[i] && GameServer()->m_apPlayers[i]->m_IsBot)
+				break;
 			if(GameServer()->m_apPlayers[i] && GameServer()->m_apPlayers[i]->GetTeam() != TEAM_SPECTATORS && !Server()->IsAuthed(i))
 			{
 				if(Server()->Tick() > GameServer()->m_apPlayers[i]->m_LastActionTick+g_Config.m_SvInactiveKickTime*Server()->TickSpeed()*60)
@@ -598,6 +601,11 @@ void IGameController::Tick()
 bool IGameController::IsTeamplay() const
 {
 	return m_GameFlags&GAMEFLAG_TEAMS;
+}
+
+bool IGameController::IsFlagGame() const
+{
+	return m_GameFlags&GAMEFLAG_FLAGS;
 }
 
 void IGameController::Snap(int SnappingClient)

@@ -15,6 +15,7 @@
 #include "gameworld.h"
 #include "player.h"
 #include "mute.h"
+#include "botengine.h"
 
 /*
 	Tick
@@ -144,6 +145,8 @@ public:
 	CVoteOptionServer *m_pVoteOptionFirst;
 	CVoteOptionServer *m_pVoteOptionLast;
 
+	class CBotEngine *m_pBotEngine;
+
 	// helper functions
 	void CreateDamageInd(vec2 Pos, float AngleMod, int Amount);
 	void CreateExplosion(vec2 Pos, int Owner, int Weapon, bool NoDamage);
@@ -176,6 +179,12 @@ public:
 	void CheckPureTuning();
 	void SendTuningParams(int ClientID);
 	void SendFreezeTuningParams(int ClientID);
+
+	// Bot slots
+	virtual void DeleteBot(int i);
+	bool AddBot(int i, bool UseDropPlayer = false);
+	virtual bool ReplacePlayerByBot(int ClientID);
+	void CheckBotNumber();
 
 	//
 	void SwapTeams();

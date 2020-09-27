@@ -23,6 +23,7 @@ public:
 	void SetTeam(int Team, bool DoChatMsg=true);
 	int GetTeam() const { return m_Team; };
 	int GetCID() const { return m_ClientID; };
+	void SetCID(int ClientID);
 
 	void Tick();
 	void PostTick();
@@ -95,6 +96,12 @@ public:
 		int m_Min;
 		int m_Max;
 	} m_Latency;
+
+	// Bot flag
+	bool m_IsBot;
+	class CBot *m_pBot;
+
+	bool IsBot() { return m_IsBot; }
 
 	int m_ChatTicks;
 	char m_aOldChatMsg[256];

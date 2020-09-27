@@ -125,6 +125,8 @@ public:
 		int m_Authed;
 		int m_AuthTries;
 
+		bool m_IsBot;
+
 		const IConsole::CCommandInfo *m_pRconCmdToSend;
 
 		void Reset();
@@ -197,6 +199,9 @@ public:
 	int SendMsgEx(CMsgPacker *pMsg, int Flags, int ClientID, bool System);
 
 	void DoSnapshot();
+
+	int NewBot(int ClientID);
+	int DelBot(int ClientID);
 
 	static int NewClientCallback(int ClientID, bool Legacy, void *pUser);
 	static int DelClientCallback(int ClientID, const char *pReason, void *pUser);
