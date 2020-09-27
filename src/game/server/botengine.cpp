@@ -85,7 +85,9 @@ void CGraph::ComputeClosestPath()
 	for(int i = 0 ; i < m_NumVertices*m_NumVertices ; i++)
 		if(Dist[i] < 1000000 && m_Diameter < Dist[i])
 			m_Diameter = Dist[i];
+	#ifdef BOT_DEBUG
 	dbg_msg("botengine","closest path computed, diameter=%d",m_Diameter);
+	#endif
 	mem_free(Dist);
 }
 
@@ -355,7 +357,9 @@ void CBotEngine::GenerateSegments()
 		if(down)
 			HSegmentCount++;
 	}
+	#ifdef BOT_DEBUG
 	dbg_msg("botengine","Found %d vertical segments, and %d horizontal segments", VSegmentCount, HSegmentCount);
+	#endif
 	m_SegmentCount = HSegmentCount+VSegmentCount;
 	m_HSegmentCount = HSegmentCount;
 	m_pSegments = (CSegment*) mem_alloc(m_SegmentCount*sizeof(CSegment),1);
@@ -493,7 +497,9 @@ void CBotEngine::GenerateSegments()
 			right = false;
 		}
 	}
+	#ifdef BOT_DEBUG
 	dbg_msg("botengine","Allocate %d segments, use %d", m_SegmentCount, pSegment - m_pSegments);
+	#endif
 	if(m_SegmentCount != pSegment - m_pSegments)
 		exit(1);
 	qsort(m_pSegments,HSegmentCount,sizeof(CSegment),SegmentComp);
@@ -551,7 +557,9 @@ void CBotEngine::GenerateCorners()
 				CornerCount++;
 		}
 	}
+	#ifdef BOT_DEBUG
 	dbg_msg("botengine","Found %d outer corners", CornerCount);
+	#endif
 	m_pCorners = (vec2*)mem_alloc(CornerCount*sizeof(vec2),1);
 	m_CornerCount = CornerCount;
 	int m = 0;
@@ -594,7 +602,9 @@ void CBotEngine::GenerateTriangles()
 				CornerCount++;
 		}
 	}
+	#ifdef BOT_DEBUG
 	dbg_msg("botengine","Found %d corners", CornerCount);
+	#endif
 	m_Triangulation.m_pTriangles = (CTriangulation::CTriangleData*)mem_alloc(2*CornerCount*sizeof(CTriangulation::CTriangleData),1);
 	vec2 *Corners = (vec2*)mem_alloc((CornerCount+3)*sizeof(vec2),1);
 	int m = 0;
@@ -729,7 +739,9 @@ void CBotEngine::GenerateTriangles()
 			}
 		}
 	}
+	#ifdef BOT_DEBUG
 	dbg_msg("botengine","Build %d triangles", m_Triangulation.m_Size);
+	#endif
 	mem_free(Corners);
 }
 
@@ -784,7 +796,9 @@ void CBotEngine::GenerateGraphFromTriangles()
 			}
 		}
 	}
+	#ifdef BOT_DEBUG
 	dbg_msg("botengine","Create graph, %d vertices, %d edges", m_Graph.m_NumVertices, m_Graph.m_NumEdges);
+	#endif
 	m_Graph.ComputeClosestPath();
 }
 

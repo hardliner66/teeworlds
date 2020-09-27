@@ -308,7 +308,9 @@ void CBot::Tick()
 	UpdateTarget();
 
 	if(m_ComputeTarget.m_NeedUpdate)
+		#ifdef BOT_DEBUG
 		dbg_msg("bot", "new target pos=(%f,%f) type=%d", m_ComputeTarget.m_Pos.x, m_ComputeTarget.m_Pos.y, m_ComputeTarget.m_Type);
+		#endif
 
 	UpdateEdge();
 
@@ -622,7 +624,9 @@ void CBot::UpdateEdge()
 	vec2 Pos = m_pPlayer->GetCharacter()->GetPos();
 	if(m_ComputeTarget.m_Type == CTarget::TARGET_EMPTY)
 	{
+		#ifdef BOT_DEBUG
 		dbg_msg("bot", "no edge");
+		#endif
 		return;
 	}
 	if(m_ComputeTarget.m_NeedUpdate)
