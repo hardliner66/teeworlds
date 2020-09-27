@@ -139,36 +139,32 @@ bool IGameController::OnEntity(int Index, vec2 Pos)
 		m_aaSpawnPoints[1][m_aNumSpawnPoints[1]++] = Pos;
 	else if(Index == ENTITY_SPAWN_BLUE)
 		m_aaSpawnPoints[2][m_aNumSpawnPoints[2]++] = Pos;
-
-	if(!IsInstagib())
+	else if(Index == ENTITY_ARMOR_1)
+		Type = POWERUP_ARMOR;
+	else if(Index == ENTITY_HEALTH_1)
+		Type = POWERUP_HEALTH;
+	else if(Index == ENTITY_WEAPON_SHOTGUN)
 	{
-		if(Index == ENTITY_ARMOR_1)
-			Type = POWERUP_ARMOR;
-		else if(Index == ENTITY_HEALTH_1)
-			Type = POWERUP_HEALTH;
-		else if(Index == ENTITY_WEAPON_SHOTGUN)
-		{
-			Type = POWERUP_WEAPON;
-			SubType = WEAPON_SHOTGUN;
-		}
-		else if(Index == ENTITY_WEAPON_GRENADE)
-		{
-			Type = POWERUP_WEAPON;
-			SubType = WEAPON_GRENADE;
-		}
-		else if(Index == ENTITY_WEAPON_RIFLE)
-		{
-			Type = POWERUP_WEAPON;
-			SubType = WEAPON_RIFLE;
-		}
-		else if(Index == ENTITY_POWERUP_NINJA && g_Config.m_SvPowerups)
-		{
-			Type = POWERUP_NINJA;
-			SubType = WEAPON_NINJA;
-		}
+		Type = POWERUP_WEAPON;
+		SubType = WEAPON_SHOTGUN;
+	}
+	else if(Index == ENTITY_WEAPON_GRENADE)
+	{
+		Type = POWERUP_WEAPON;
+		SubType = WEAPON_GRENADE;
+	}
+	else if(Index == ENTITY_WEAPON_RIFLE)
+	{
+		Type = POWERUP_WEAPON;
+		SubType = WEAPON_RIFLE;
+	}
+	else if(Index == ENTITY_POWERUP_NINJA && g_Config.m_SvPowerups)
+	{
+		Type = POWERUP_NINJA;
+		SubType = WEAPON_NINJA;
 	}
 
-	if(Type != -1)
+	if(Type != -1 && !g_Config.m_SvNoItems)
 	{
 		CPickup *pPickup = new CPickup(&GameServer()->m_World, Type, SubType);
 		pPickup->m_Pos = Pos;
@@ -370,15 +366,9 @@ void IGameController::OnCharacterSpawn(class CCharacter *pChr)
 	// default health
 	pChr->IncreaseHealth(10);
 
-
-	if(IsInstagib())
-		pChr->GiveWeapon(WEAPON_RIFLE, -1);
-	else
-	{
-		// give default weapons
-		pChr->GiveWeapon(WEAPON_HAMMER, -1);
-		pChr->GiveWeapon(WEAPON_GUN, 10);
-	}
+	// give default weapons
+	pChr->GiveWeapon(WEAPON_HAMMER, -1);
+	pChr->GiveWeapon(WEAPON_GUN, 10);
 }
 
 void IGameController::DoWarmup(int Seconds)
