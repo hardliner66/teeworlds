@@ -9,11 +9,12 @@ class CHud : public CComponent
 	float m_Width, m_Height;
 	float m_AverageFPS;
 
-	// Race
+
+	int64 m_WarmupHideTick;
+	bool IsLargeWarmupTimerShown();
+
 	int m_CheckpointDiff;
-	int m_RaceTime;
-	int m_CheckpointTick;
-	int m_ServerRecord;
+	int64 m_CheckpointTime;
 
 	void RenderCursor();
 
@@ -21,25 +22,26 @@ class CHud : public CComponent
 	void RenderConnectionWarning();
 	void RenderTeambalanceWarning();
 	void RenderVoting();
+	void RenderNinjaBar(float x, float y, float Progress);
 	void RenderHealthAndAmmo(const CNetObj_Character *pCharacter);
 	void RenderGameTimer();
-	void RenderPauseNotification();
-	void RenderSuddenDeath();
+	void RenderPauseTimer();
+	void RenderStartCountdown();
+	void RenderNetworkIssueNotification();
+	void RenderDeadNotification();
 	void RenderScoreHud();
 	void RenderSpectatorHud();
+	void RenderSpectatorNotification();
+	void RenderReadyUpNotification();
 	void RenderWarmupTimer();
-	void RenderSpeedmeter();
-	void RenderRaceTime();
+	void RenderRaceTime(const CNetObj_PlayerInfoRace *pRaceInfo);
 	void RenderCheckpoint();
-	void RenderRecord();
-
-	void MapscreenToGroup(float CenterX, float CenterY, struct CMapItemGroup *PGroup);
 public:
 	CHud();
 
 	virtual void OnReset();
-	virtual void OnRender();
 	virtual void OnMessage(int MsgType, void *pRawMsg);
+	virtual void OnRender();
 };
 
 #endif

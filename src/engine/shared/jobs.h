@@ -2,9 +2,6 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #ifndef ENGINE_SHARED_JOBS_H
 #define ENGINE_SHARED_JOBS_H
-
-#include <base/tl/array.h>
-
 typedef int (*JOBFUNC)(void *pData);
 
 class CJobPool;
@@ -24,7 +21,7 @@ class CJob
 public:
 	CJob()
 	{
-		m_Status = STATE_PENDING;
+		m_Status = STATE_DONE;
 		m_pFuncData = 0;
 	}
 
@@ -36,17 +33,22 @@ public:
 	};
 
 	int Status() const { return m_Status; }
-	int Result() const { return m_Result; }
+	int Result() const {return m_Result; }
 };
 
 class CJobPool
 {
+	enum
+	{
+		MAX_THREADS=32
+	};
+	int m_NumThreads;
+	void *m_apThreads[MAX_THREADS];
+	volatile bool m_Shutdown;
+
 	LOCK m_Lock;
 	CJob *m_pFirstJob;
 	CJob *m_pLastJob;
-
-	array<void*> m_lThreads;
-	volatile bool m_Shutdown;
 
 	static void WorkerThread(void *pUser);
 

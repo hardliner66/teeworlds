@@ -3,35 +3,67 @@
 #ifndef ENGINE_CLIENT_INPUT_H
 #define ENGINE_CLIENT_INPUT_H
 
+#include <base/tl/sorted_array.h>
+
 class CInput : public IEngineInput
 {
 	IEngineGraphics *m_pGraphics;
+	CConfig *m_pConfig;
+	IConsole *m_pConsole;
 
-	int m_InputGrabbed;
+	sorted_array<SDL_Joystick*> m_apJoysticks;
+	int m_SelectedJoystickIndex;
+	char m_aSelectedJoystickGUID[34];
+	SDL_Joystick* GetActiveJoystick();
+	void InitJoysticks();
+	void CloseJoysticks();
 
-	int64 m_LastRelease;
-	int64 m_ReleaseDelta;
+	bool m_MouseInputRelative;
+	char *m_pClipboardText;
 
-	void AddEvent(int Unicode, int Key, int Flags);
+	int m_PreviousHat;
+
+	bool m_MouseDoubleClick;
+
+	void AddEvent(char *pText, int Key, int Flags);
+	void Clear();
+	bool IsEventValid(CEvent *pEvent) const { return pEvent->m_InputCount == m_InputCounter; };
+
+	//quick access to input
+	unsigned short m_aInputCount[g_MaxKeys];	// tw-KEY
+	unsigned char m_aInputState[g_MaxKeys];	// SDL_SCANCODE
+	int m_InputCounter;
+
+	void ClearKeyStates();
+	bool KeyState(int Key) const;
 
 	IEngineGraphics *Graphics() { return m_pGraphics; }
 
 public:
 	CInput();
+	~CInput();
 
-	virtual void Init();
+	void Init();
+	int Update();
 
-	virtual void MouseRelative(float *x, float *y);
-	virtual void MouseModeAbsolute();
-	virtual void MouseModeRelative();
-	virtual int MouseDoubleClick();
+	bool KeyIsPressed(int Key) const { return KeyState(Key); }
+	bool KeyPress(int Key, bool CheckCounter) const { return CheckCounter ? (m_aInputCount[Key] == m_InputCounter) : m_aInputCount[Key]; }
 
-	void ClearKeyStates();
-	int KeyState(int Key);
+	int NumJoysticks() const { return m_apJoysticks.size(); }
+	int GetJoystickIndex() const { return m_SelectedJoystickIndex; };
+	void SelectNextJoystick();
+	const char* GetJoystickName();
+	int GetJoystickNumAxes();
+	float GetJoystickAxisValue(int Axis);
+	bool JoystickRelative(float *pX, float *pY);
 
-	int ButtonPressed(int Button) { return m_aInputState[m_InputCurrent][Button]; }
+	void MouseModeRelative();
+	void MouseModeAbsolute();
+	int MouseDoubleClick();
+	bool MouseRelative(float *pX, float *pY);
 
-	virtual int Update();
+	const char *GetClipboardText();
+	void SetClipboardText(const char *pText);
 };
 
 #endif

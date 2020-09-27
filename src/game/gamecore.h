@@ -9,7 +9,7 @@
 #include <math.h>
 #include "collision.h"
 #include <engine/shared/protocol.h>
-#include <game/generated/protocol.h>
+#include <generated/protocol.h>
 
 
 class CTuneParam
@@ -43,31 +43,9 @@ public:
 	static int Num() { return sizeof(CTuningParams)/sizeof(int); }
 	bool Set(int Index, float Value);
 	bool Set(const char *pName, float Value);
-	bool Get(int Index, float *pValue);
-	bool Get(const char *pName, float *pValue);
+	bool Get(int Index, float *pValue) const;
+	bool Get(const char *pName, float *pValue) const;
 };
-
-
-inline vec2 GetDirection(int Angle)
-{
-	float a = Angle/256.0f;
-	return vec2(cosf(a), sinf(a));
-}
-
-inline vec2 GetDir(float Angle)
-{
-	return vec2(cosf(Angle), sinf(Angle));
-}
-
-inline float GetAngle(vec2 Dir)
-{
-	if(Dir.x == 0 && Dir.y == 0)
-		return 0.0f;
-	float a = atanf(Dir.y/Dir.x);
-	if(Dir.x < 0)
-		a = a+pi;
-	return a;
-}
 
 inline void StrToInts(int *pInts, int Num, const char *pStr)
 {
@@ -150,33 +128,18 @@ enum
 	HOOK_RETRACT_END=3,
 	HOOK_FLYING,
 	HOOK_GRABBED,
-
-	COREEVENT_GROUND_JUMP=0x01,
-	COREEVENT_AIR_JUMP=0x02,
-	COREEVENT_HOOK_LAUNCH=0x04,
-	COREEVENT_HOOK_ATTACH_PLAYER=0x08,
-	COREEVENT_HOOK_ATTACH_GROUND=0x10,
-	COREEVENT_HOOK_HIT_NOHOOK=0x20,
-	COREEVENT_HOOK_RETRACT=0x40,
 };
 
 class CWorldCore
 {
 public:
-	CWorldCore(bool Race = false)
+	CWorldCore()
 	{
 		mem_zero(m_apCharacters, sizeof(m_apCharacters));
-		m_Teleport = Race;
-		m_Speedup = Race;
-		m_StopTiles = Race;
 	}
 
 	CTuningParams m_Tuning;
 	class CCharacterCore *m_apCharacters[MAX_CLIENTS];
-
-	bool m_Teleport;
-	bool m_Speedup;
-	bool m_StopTiles;
 };
 
 class CCharacterCore
@@ -184,9 +147,11 @@ class CCharacterCore
 	CWorldCore *m_pWorld;
 	CCollision *m_pCollision;
 public:
+	static const float PHYS_SIZE;
 	vec2 m_Pos;
-	vec2 m_PrevPos;
 	vec2 m_Vel;
+
+	vec2 m_HookDragVel;
 
 	vec2 m_HookPos;
 	vec2 m_HookDir;
@@ -198,19 +163,20 @@ public:
 
 	int m_Direction;
 	int m_Angle;
+
+	bool m_Death;
+
 	CNetObj_PlayerInput m_Input;
 
 	int m_TriggeredEvents;
-
-	bool m_Teleported;
-	bool m_SpeedupTouch;
-
-	int m_LastSpeedup;
 
 	void Init(CWorldCore *pWorld, CCollision *pCollision);
 	void Reset();
 	void Tick(bool UseInput);
 	void Move();
+
+	void AddDragVelocity();
+	void ResetDragVelocity();
 
 	void Read(const CNetObj_CharacterCore *pObjCore);
 	void Write(CNetObj_CharacterCore *pObjCore);

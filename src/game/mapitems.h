@@ -25,6 +25,7 @@ enum
 	CURVETYPE_SLOW,
 	CURVETYPE_FAST,
 	CURVETYPE_SMOOTH,
+	CURVETYPE_BEZIER,
 	NUM_CURVETYPES,
 
 	// game layer tiles
@@ -39,22 +40,13 @@ enum
 	ENTITY_WEAPON_SHOTGUN,
 	ENTITY_WEAPON_GRENADE,
 	ENTITY_POWERUP_NINJA,
-	ENTITY_WEAPON_RIFLE,
+	ENTITY_WEAPON_LASER,
 	NUM_ENTITIES,
 
 	TILE_AIR=0,
 	TILE_SOLID,
 	TILE_DEATH,
 	TILE_NOHOOK,
-	TILE_TELEIN=26,
-	TILE_TELEOUT,
-	TILE_BOOST,
-	TILE_STOPL,
-	TILE_STOPR,
-	TILE_STOPB,
-	TILE_STOPT,
-	TILE_BEGIN,
-	TILE_END,
 
 	TILEFLAG_VFLIP=1,
 	TILEFLAG_HFLIP=2,
@@ -63,8 +55,6 @@ enum
 
 	LAYERFLAG_DETAIL=1,
 	TILESLAYERFLAG_GAME=1,
-	TILESLAYERFLAG_TELE=2,
-	TILESLAYERFLAG_SPEEDUP=4,
 
 	ENTITY_OFFSET=255-16*4,
 };
@@ -101,28 +91,14 @@ public:
 	unsigned char m_Reserved;
 };
 
-class CTeleTile
-{
-public:
-	unsigned char m_Number;
-	unsigned char m_Type;
-};
-
-class CSpeedupTile
-{
-public:
-	unsigned char m_Force;
-	short m_Angle;
-};
-
 struct CMapItemInfo
 {
+	enum { CURRENT_VERSION=1 };
 	int m_Version;
 	int m_Author;
 	int m_MapVersion;
 	int m_Credits;
 	int m_License;
-	int m_Settings;
 } ;
 
 struct CMapItemImage_v1
@@ -176,6 +152,8 @@ struct CMapItemLayer
 
 struct CMapItemLayerTilemap
 {
+	enum { CURRENT_VERSION=4 };
+
 	CMapItemLayer m_Layer;
 	int m_Version;
 
@@ -191,14 +169,12 @@ struct CMapItemLayerTilemap
 	int m_Data;
 
 	int m_aName[3];
-
-	int m_Tele;
-	
-	int m_Speedup;
 } ;
 
 struct CMapItemLayerQuads
 {
+	enum { CURRENT_VERSION=2 };
+
 	CMapItemLayer m_Layer;
 	int m_Version;
 
@@ -211,17 +187,31 @@ struct CMapItemLayerQuads
 
 struct CMapItemVersion
 {
+	enum { CURRENT_VERSION=1 };
+
 	int m_Version;
 } ;
 
-struct CEnvPoint
+struct CEnvPoint_v1
 {
 	int m_Time; // in ms
 	int m_Curvetype;
 	int m_aValues[4]; // 1-4 depending on envelope (22.10 fixed point)
 
-	bool operator<(const CEnvPoint &Other) { return m_Time < Other.m_Time; }
+	bool operator<(const CEnvPoint_v1 &Other) const { return m_Time < Other.m_Time; }
 } ;
+
+struct CEnvPoint : public CEnvPoint_v1
+{
+	// bezier curve only
+	// dx in ms and dy as 22.10 fxp
+	int m_aInTangentdx[4];
+	int m_aInTangentdy[4];
+	int m_aOutTangentdx[4];
+	int m_aOutTangentdy[4];
+
+	bool operator<(const CEnvPoint& other) const { return m_Time < other.m_Time; }
+};
 
 struct CMapItemEnvelope_v1
 {
@@ -232,10 +222,16 @@ struct CMapItemEnvelope_v1
 	int m_aName[8];
 } ;
 
-struct CMapItemEnvelope : public CMapItemEnvelope_v1
+struct CMapItemEnvelope_v2 : public CMapItemEnvelope_v1
 {
 	enum { CURRENT_VERSION=2 };
 	int m_Synchronized;
+};
+
+struct CMapItemEnvelope : public CMapItemEnvelope_v2
+{
+	// bezier curve support
+	enum { CURRENT_VERSION=3 };
 };
 
 #endif

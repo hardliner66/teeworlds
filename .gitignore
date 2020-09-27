@@ -22,7 +22,6 @@ other/sdl
 Info.plist
 
 crapnet*
-dilate*
 fake_server*
 map_resave*
 map_version*
@@ -33,7 +32,6 @@ teeworlds*
 !teeworlds.rc
 teeworlds_srv*
 testrunner
-tileset_border*
 versionsrv*
 
 # IDE project files
@@ -52,13 +50,8 @@ out
 tags
 
 # CMake
-race-data
-!/race-data
 data
 generated
-!/data
-src
-!/src
 
 .ninja_deps
 .ninja_log

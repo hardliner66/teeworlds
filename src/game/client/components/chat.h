@@ -2,9 +2,12 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #ifndef GAME_CLIENT_COMPONENTS_CHAT_H
 #define GAME_CLIENT_COMPONENTS_CHAT_H
+#include <base/system.h>
+#include <base/tl/array.h>
 #include <engine/shared/ringbuffer.h>
 #include <game/client/component.h>
 #include <game/client/lineinput.h>
+#include <game/commands.h>
 
 class CChat : public CComponent
 {
@@ -12,31 +15,30 @@ class CChat : public CComponent
 
 	enum
 	{
-		MAX_LINES = 25,
+		MAX_LINES = 250,
+		MAX_CHAT_PAGES = 10,
+		MAX_LINE_LENGTH = 512,
 	};
 
 	struct CLine
 	{
 		int64 m_Time;
-		float m_YOffset[2];
+		vec2 m_Size;
 		int m_ClientID;
-		int m_Team;
+		int m_TargetID;
+		int m_Mode;
 		int m_NameColor;
-		char m_aName[64];
-		char m_aText[512];
+		char m_aName[MAX_NAME_LENGTH];
+		char m_aText[MAX_LINE_LENGTH];
 		bool m_Highlighted;
 	};
 
 	CLine m_aLines[MAX_LINES];
 	int m_CurrentLine;
 
-	// chat
+	// chat sounds
 	enum
 	{
-		MODE_NONE=0,
-		MODE_ALL,
-		MODE_TEAM,
-
 		CHAT_SERVER=0,
 		CHAT_HIGHLIGHT,
 		CHAT_CLIENT,
@@ -44,18 +46,29 @@ class CChat : public CComponent
 	};
 
 	int m_Mode;
+	int m_WhisperTarget;
+	int m_LastWhisperFrom;
 	bool m_Show;
+	int m_BacklogPage;
 	bool m_InputUpdate;
 	int m_ChatStringOffset;
 	int m_OldChatStringLength;
 	int m_CompletionChosen;
+	int m_CompletionFav;
 	char m_aCompletionBuffer[256];
 	int m_PlaceholderOffset;
 	int m_PlaceholderLength;
+	bool m_ReverseCompletion;
+	bool m_FirstMap;
+	float m_CurrentLineWidth;
+
+	int m_ChatBufferMode;
+	char m_ChatBuffer[MAX_LINE_LENGTH];
+	char m_ChatCmdBuffer[1024];
 
 	struct CHistoryEntry
 	{
-		int m_Team;
+		int m_Mode;
 		char m_aText[1];
 	};
 	CHistoryEntry *m_pHistoryEntry;
@@ -64,23 +77,63 @@ class CChat : public CComponent
 	int64 m_LastChatSend;
 	int64 m_aLastSoundPlayed[CHAT_NUM];
 
+	typedef void (*COMMAND_CALLBACK)(CChat *pChatData, const char *pArgs);
+
+	// chat commands
+	bool m_IgnoreCommand;
+	int m_SelectedCommand;
+	int m_CommandStart;
+
+	array<bool> m_aFilter;
+	int m_FilteredCount;
+	int FilterChatCommands(const char *pLine);
+	int GetFirstActiveCommand();
+	int NextActiveCommand(int *Index);
+	int PreviousActiveCommand(int *Index);
+	int GetActiveCountRange(int i, int j);
+
+	CCommandManager m_CommandManager;
+	bool IsTypingCommand() const;
+	void HandleCommands(float x, float y, float w);
+	bool ExecuteCommand();
+	bool CompleteCommand();
+
+	static void Com_All(IConsole::IResult *pResult, void *pContext);
+	static void Com_Team(IConsole::IResult *pResult, void *pContext);
+	static void Com_Reply(IConsole::IResult *pResult, void *pContext);
+	static void Com_Whisper(IConsole::IResult *pResult, void *pContext);
+	static void Com_Mute(IConsole::IResult *pResult, void *pContext);
+	static void Com_Befriend(IConsole::IResult *pResult, void *pContext);
+
+	void ClearInput();
+
 	static void ConSay(IConsole::IResult *pResult, void *pUserData);
 	static void ConSayTeam(IConsole::IResult *pResult, void *pUserData);
+	static void ConSaySelf(IConsole::IResult *pResult, void *pUserData);
+	static void ConWhisper(IConsole::IResult *pResult, void *pUserData);
 	static void ConChat(IConsole::IResult *pResult, void *pUserData);
 	static void ConShowChat(IConsole::IResult *pResult, void *pUserData);
+	static void ServerCommandCallback(IConsole::IResult *pResult, void *pContext);
 
 public:
-	CChat();
+	// client IDs for special messages
+	enum
+	{
+		CLIENT_MSG = -2,
+		SERVER_MSG = -1,
+	};
+	// Mode defined by the CHAT_* constants in protocol.h
 
-	bool IsActive() const { return m_Mode != MODE_NONE; }
+	bool IsActive() const { return m_Mode != CHAT_NONE; }
+	void AddLine(const char *pLine, int ClientID = SERVER_MSG, int Mode = CHAT_NONE, int TargetID = -1);
+	void EnableMode(int Mode, const char* pText = NULL);
+	void Say(int Mode, const char *pLine);
+	void ClearChatBuffer();
+	const char* GetCommandName(int Mode) const;
 
-	void AddLine(int ClientID, int Team, const char *pLine);
-
-	void EnableMode(int Team);
-
-	void Say(int Team, const char *pLine);
-
+	virtual void OnInit();
 	virtual void OnReset();
+	virtual void OnMapLoad();
 	virtual void OnConsoleInit();
 	virtual void OnStateChange(int NewState, int OldState);
 	virtual void OnRender();

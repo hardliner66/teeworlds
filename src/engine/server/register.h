@@ -3,6 +3,8 @@
 #ifndef ENGINE_SERVER_REGISTER_H
 #define ENGINE_SERVER_REGISTER_H
 
+#include <engine/shared/network.h>
+
 class CRegister
 {
 	enum
@@ -25,6 +27,7 @@ class CRegister
 
 	class CNetServer *m_pNetServer;
 	class IEngineMasterServer *m_pMasterServer;
+	class CConfig *m_pConfig;
 	class IConsole *m_pConsole;
 
 	int m_RegisterState;
@@ -36,16 +39,16 @@ class CRegister
 	int m_RegisterRegisteredServer;
 
 	void RegisterNewState(int State);
-	void RegisterSendFwcheckresponse(NETADDR *pAddr);
+	void RegisterSendFwcheckresponse(NETADDR *pAddr, TOKEN Token);
 	void RegisterSendHeartbeat(NETADDR Addr);
 	void RegisterSendCountRequest(NETADDR Addr);
 	void RegisterGotCount(struct CNetChunk *pChunk);
 
 public:
 	CRegister();
-	void Init(class CNetServer *pNetServer, class IEngineMasterServer *pMasterServer, class IConsole *pConsole);
+	void Init(class CNetServer *pNetServer, class IEngineMasterServer *pMasterServer, class CConfig *pConfig, class IConsole *pConsole);
 	void RegisterUpdate(int Nettype);
-	int RegisterProcessPacket(struct CNetChunk *pPacket);
+	int RegisterProcessPacket(struct CNetChunk *pPacket, TOKEN Token);
 };
 
 #endif

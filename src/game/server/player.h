@@ -3,9 +3,15 @@
 #ifndef GAME_SERVER_PLAYER_H
 #define GAME_SERVER_PLAYER_H
 
-// this include should perhaps be removed
-#include "entities/character.h"
-#include "gamecontext.h"
+#include "alloc.h"
+
+
+enum
+{
+	WEAPON_GAME = -3, // team switching etc
+	WEAPON_SELF = -2, // console kill command
+	WEAPON_WORLD = -1, // death tiles etc
+};
 
 // player object
 class CPlayer
@@ -13,20 +19,17 @@ class CPlayer
 	MACRO_ALLOC_POOL_ID()
 
 public:
-	CPlayer(CGameContext *pGameServer, int ClientID, int Team);
+	CPlayer(CGameContext *pGameServer, int ClientID, bool Dummy, bool AsSpec = false);
 	~CPlayer();
 
 	void Init(int CID);
-
-	void InitRace();
-	bool CheckClient(int Type, int Version = 0) const;
-	bool CheckClientMin(int Type, int Version) const;
 
 	void TryRespawn();
 	void Respawn();
 	void SetTeam(int Team, bool DoChatMsg=true);
 	int GetTeam() const { return m_Team; };
 	int GetCID() const { return m_ClientID; };
+	bool IsDummy() const { return m_Dummy; }
 
 	void Tick();
 	void PostTick();
@@ -34,7 +37,7 @@ public:
 
 	void OnDirectInput(CNetObj_PlayerInput *NewInput);
 	void OnPredictedInput(CNetObj_PlayerInput *NewInput);
-	void OnDisconnect(const char *pReason);
+	void OnDisconnect();
 
 	void KillCharacter(int Weapon = WEAPON_GAME);
 	CCharacter *GetCharacter();
@@ -50,9 +53,16 @@ public:
 	int m_aActLatency[MAX_CLIENTS];
 
 	// used for spectator mode
-	int m_SpectatorID;
+	int GetSpectatorID() const { return m_SpectatorID; }
+	bool SetSpectatorID(int SpecMode, int SpectatorID);
+	bool m_DeadSpecMode;
+	bool DeadCanFollow(CPlayer *pPlayer) const;
+	void UpdateDeadSpecMode();
 
-	bool m_IsReady;
+	bool m_IsReadyToEnter;
+	bool m_IsReadyToPlay;
+
+	bool m_RespawnDisabled;
 
 	//
 	int m_Vote;
@@ -66,25 +76,25 @@ public:
 	int m_LastChangeInfo;
 	int m_LastEmote;
 	int m_LastKill;
+	int m_LastReadyChange;
 
-	int m_Last_ShowOthers;
-	
 	// TODO: clean this up
 	struct
 	{
-		char m_SkinName[64];
-		int m_UseCustomColor;
-		int m_ColorBody;
-		int m_ColorFeet;
+		char m_aaSkinPartNames[NUM_SKINPARTS][24];
+		int m_aUseCustomColors[NUM_SKINPARTS];
+		int m_aSkinPartColors[NUM_SKINPARTS];
 	} m_TeeInfos;
 
 	int m_RespawnTick;
 	int m_DieTick;
 	int m_Score;
 	int m_ScoreStartTick;
-	bool m_ForceBalanced;
 	int m_LastActionTick;
 	int m_TeamChangeTick;
+
+	int m_InactivityTickCounter;
+
 	struct
 	{
 		int m_TargetX;
@@ -102,16 +112,6 @@ public:
 		int m_Max;
 	} m_Latency;
 
-	bool m_ResetPickups;
-	bool m_ShowOthers;
-	
-	struct CRaceCfg
-	{
-		bool m_TimerWarmup;
-		bool m_TimerNetMsg;
-		bool m_CheckpointNetMsg;
-	} m_RaceCfg;
-	
 private:
 	CCharacter *m_pCharacter;
 	CGameContext *m_pGameServer;
@@ -123,6 +123,13 @@ private:
 	bool m_Spawning;
 	int m_ClientID;
 	int m_Team;
+	bool m_Dummy;
+
+	// used for spectator mode
+	int m_SpecMode;
+	int m_SpectatorID;
+	class CFlag *m_pSpecFlag;
+	bool m_ActiveSpecSwitch;
 };
 
 #endif

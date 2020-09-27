@@ -10,6 +10,7 @@ class CSound : public IEngineSound
 	int m_SoundEnabled;
 
 public:
+	CConfig *m_pConfig;
 	IEngineGraphics *m_pGraphics;
 	IStorage *m_pStorage;
 
@@ -23,17 +24,18 @@ public:
 
 	virtual bool IsSoundEnabled() { return m_SoundEnabled != 0; }
 
-	virtual int LoadWV(const char *pFilename);
-	virtual void UnloadSample(int SampleID);
+	virtual CSampleHandle LoadWV(const char *pFilename);
 
 	virtual void SetListenerPos(float x, float y);
-	virtual void SetChannel(int ChannelID, float Vol, float Pan);
+	virtual void SetChannelVolume(int ChannelID, float Vol);
+	virtual void SetMaxDistance(float Distance);
 
-	int Play(int ChannelID, int SampleID, int Flags, float x, float y);
-	virtual int PlayAt(int ChannelID, int SampleID, int Flags, float x, float y);
-	virtual int Play(int ChannelID, int SampleID, int Flags);
-	virtual void Stop(int SampleID);
+	int Play(int ChannelID, CSampleHandle SampleID, int Flags, float x, float y);
+	virtual int PlayAt(int ChannelID, CSampleHandle SampleID, int Flags, float x, float y);
+	virtual int Play(int ChannelID, CSampleHandle SampleID, int Flags);
+	virtual void Stop(CSampleHandle SampleID);
 	virtual void StopAll();
+	virtual bool IsPlaying(CSampleHandle SampleID);
 };
 
 #endif

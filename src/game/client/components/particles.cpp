@@ -4,9 +4,9 @@
 #include <engine/graphics.h>
 #include <engine/demo.h>
 
-#include <game/generated/client_data.h>
+#include <generated/client_data.h>
 #include <game/client/render.h>
-#include <game/gamecore.h>
+
 #include "particles.h"
 
 CParticles::CParticles()
@@ -45,7 +45,7 @@ void CParticles::Add(int Group, CParticle *pPart)
 	}
 	else
 	{
-		if(m_pClient->m_Snap.m_pGameInfoObj && m_pClient->m_Snap.m_pGameInfoObj->m_GameStateFlags&GAMESTATEFLAG_PAUSED)
+		if(m_pClient->IsWorldPaused())
 			return;
 	}
 
@@ -137,23 +137,22 @@ void CParticles::OnRender()
 	if(Client()->State() < IClient::STATE_ONLINE)
 		return;
 
-	set_new_tick();
-	static int64 LastTime = 0;
-	int64 t = time_get();
+	static int64 s_LastTime = 0;
+	int64 Now = time_get();
 
 	if(Client()->State() == IClient::STATE_DEMOPLAYBACK)
 	{
 		const IDemoPlayer::CInfo *pInfo = DemoPlayer()->BaseInfo();
 		if(!pInfo->m_Paused)
-			Update((float)((t-LastTime)/(double)time_freq())*pInfo->m_Speed);
+			Update((float)((Now-s_LastTime)/(double)time_freq())*pInfo->m_Speed);
 	}
 	else
 	{
-		if(m_pClient->m_Snap.m_pGameInfoObj && !(m_pClient->m_Snap.m_pGameInfoObj->m_GameStateFlags&GAMESTATEFLAG_PAUSED))
-			Update((float)((t-LastTime)/(double)time_freq()));
+		if(!m_pClient->IsWorldPaused())
+			Update((float)((Now-s_LastTime)/(double)time_freq()));
 	}
 
-	LastTime = t;
+	s_LastTime = Now;
 }
 
 void CParticles::RenderGroup(int Group)

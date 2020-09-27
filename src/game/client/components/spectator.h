@@ -10,14 +10,18 @@ class CSpectator : public CComponent
 {
 	enum
 	{
-		NO_SELECTION=-2,
+		NO_SELECTION=-1,
 	};
 
 	bool m_Active;
 	bool m_WasActive;
 
 	int m_SelectedSpectatorID;
+	int m_SelectedSpecMode;
 	vec2 m_SelectorMouse;
+
+	bool SpecModePossible(int SpecMode, int SpectatorID);
+	void HandleSpectateNextPrev(int Direction);
 
 	static void ConKeySpectator(IConsole::IResult *pResult, void *pUserData);
 	static void ConSpectate(IConsole::IResult *pResult, void *pUserData);
@@ -28,12 +32,12 @@ public:
 	CSpectator();
 
 	virtual void OnConsoleInit();
-	virtual bool OnMouseMove(float x, float y);
+	virtual bool OnCursorMove(float x, float y, int CursorType);
 	virtual void OnRender();
 	virtual void OnRelease();
 	virtual void OnReset();
 
-	void Spectate(int SpectatorID);
+	void Spectate(int SpecMode, int SpectatorID);
 };
 
 #endif

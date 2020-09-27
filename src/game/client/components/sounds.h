@@ -2,7 +2,10 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #ifndef GAME_CLIENT_COMPONENTS_SOUNDS_H
 #define GAME_CLIENT_COMPONENTS_SOUNDS_H
+
+#include <engine/sound.h>
 #include <game/client/component.h>
+#include <engine/shared/jobs.h>
 
 class CSounds : public CComponent
 {
@@ -20,7 +23,7 @@ class CSounds : public CComponent
 	class CJob m_SoundJob;
 	bool m_WaitForSoundJob;
 	
-	int GetSampleId(int SetId);
+	ISound::CSampleHandle GetSampleId(int SetId);
 
 public:
 	// sound channels
@@ -32,6 +35,7 @@ public:
 		CHN_GLOBAL,
 	};
 
+	virtual int GetInitAmount() const;
 	virtual void OnInit();
 	virtual void OnReset();
 	virtual void OnStateChange(int NewState, int OldState);
@@ -41,8 +45,8 @@ public:
 	void Enqueue(int Channel, int SetId);
 	void Play(int Channel, int SetId, float Vol);
 	void PlayAt(int Channel, int SetId, float Vol, vec2 Pos);
-	void PlayAndRecord(int Channel, int SetId, float Vol, vec2 Pos);
 	void Stop(int SetId);
+	bool IsPlaying(int SetId);
 };
 
 

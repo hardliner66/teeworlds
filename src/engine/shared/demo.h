@@ -6,11 +6,13 @@
 #include <engine/demo.h>
 #include <engine/shared/protocol.h>
 
+#include "huffman.h"
 #include "snapshot.h"
 
 class CDemoRecorder : public IDemoRecorder
 {
 	class IConsole *m_pConsole;
+	CHuffman m_Huffman;
 	IOHANDLE m_File;
 	int m_LastTickMarker;
 	int m_LastKeyFrame;
@@ -24,11 +26,8 @@ class CDemoRecorder : public IDemoRecorder
 	void Write(int Type, const void *pData, int Size);
 public:
 	CDemoRecorder(class CSnapshotDelta *pSnapshotDelta);
-#if defined(CONF_TEERACE)
-	CDemoRecorder() {}
-#endif
 
-	int Start(class IStorage *pStorage, class IConsole *pConsole, const char *pFilename, const char *pNetversion, const char *pMap, unsigned MapCrc, const char *pType);
+	int Start(class IStorage *pStorage, class IConsole *pConsole, const char *pFilename, const char *pNetversion, const char *pMap, SHA256_DIGEST MapSha256, unsigned MapCrc, const char *pType);
 	int Stop();
 	void AddDemoMarker();
 
@@ -43,10 +42,10 @@ public:
 class CDemoPlayer : public IDemoPlayer
 {
 public:
-	class IListner
+	class IListener
 	{
 	public:
-		virtual ~IListner() {}
+		virtual ~IListener() {}
 		virtual void OnDemoPlayerSnapshot(void *pData, int Size) = 0;
 		virtual void OnDemoPlayerMessage(void *pData, int Size) = 0;
 	};
@@ -54,7 +53,6 @@ public:
 	struct CPlaybackInfo
 	{
 		CDemoHeader m_Header;
-		CTimelineMarkers m_TimelineMarkers;
 
 		IDemoPlayer::CInfo m_Info;
 
@@ -71,7 +69,7 @@ public:
 	};
 
 private:
-	IListner *m_pListner;
+	IListener *m_pListener;
 
 
 	// Playback
@@ -88,8 +86,10 @@ private:
 	};
 
 	class IConsole *m_pConsole;
+	CHuffman m_Huffman;
 	IOHANDLE m_File;
 	char m_aFilename[256];
+	char m_aErrorMsg[256];
 	CKeyFrame *m_pKeyFrames;
 
 	CPlaybackInfo m_Info;
@@ -107,9 +107,9 @@ public:
 
 	CDemoPlayer(class CSnapshotDelta *m_pSnapshotDelta);
 
-	void SetListner(IListner *pListner);
+	void SetListener(IListener *pListner);
 
-	int Load(class IStorage *pStorage, class IConsole *pConsole, const char *pFilename, int StorageType);
+	const char *Load(class IStorage *pStorage, class IConsole *pConsole, const char *pFilename, int StorageType, const char *pNetversion);
 	int Play();
 	void Pause();
 	void Unpause();

@@ -1,19 +1,21 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
-#include <engine/shared/config.h>
-#include <game/generated/protocol.h>
 #include <game/server/gamecontext.h>
+#include <game/server/player.h>
+
+#include "character.h"
 #include "projectile.h"
 
 CProjectile::CProjectile(CGameWorld *pGameWorld, int Type, int Owner, vec2 Pos, vec2 Dir, int Span,
 		int Damage, bool Explosive, float Force, int SoundImpact, int Weapon)
-: CEntity(pGameWorld, CGameWorld::ENTTYPE_PROJECTILE)
+: CEntity(pGameWorld, CGameWorld::ENTTYPE_PROJECTILE, vec2(round_to_int(Pos.x), round_to_int(Pos.y)))
 {
 	m_Type = Type;
-	m_Pos = Pos;
-	m_Direction = Dir;
+	m_Direction.x = round_to_int(Dir.x*100.0f) / 100.0f;
+	m_Direction.y = round_to_int(Dir.y*100.0f) / 100.0f;
 	m_LifeSpan = Span;
 	m_Owner = Owner;
+	m_OwnerTeam = GameServer()->m_apPlayers[Owner]->GetTeam();
 	m_Force = Force;
 	m_Damage = Damage;
 	m_SoundImpact = SoundImpact;
@@ -26,7 +28,15 @@ CProjectile::CProjectile(CGameWorld *pGameWorld, int Type, int Owner, vec2 Pos, 
 
 void CProjectile::Reset()
 {
-	GameServer()->m_World.DestroyEntity(this);
+	GameWorld()->DestroyEntity(this);
+}
+
+void CProjectile::LoseOwner()
+{
+	if(m_OwnerTeam == TEAM_BLUE)
+		m_Owner = PLAYER_TEAM_BLUE;
+	else
+		m_Owner = PLAYER_TEAM_RED;
 }
 
 vec2 CProjectile::GetPos(float Time)
@@ -64,40 +74,22 @@ void CProjectile::Tick()
 	vec2 CurPos = GetPos(Ct);
 	int Collide = GameServer()->Collision()->IntersectLine(PrevPos, CurPos, &CurPos, 0);
 	CCharacter *OwnerChar = GameServer()->GetPlayerChar(m_Owner);
-	//CCharacter *TargetChr = GameServer()->m_World.IntersectCharacter(PrevPos, CurPos, 6.0f, CurPos, OwnerChar);
-
-	// remove projectile if the player is dead to prevent cheating at start
-	if(g_Config.m_SvDeleteGrenadesAfterDeath && !OwnerChar)
-	{
-		GameServer()->m_World.DestroyEntity(this);
-		return;
-	}
+	CCharacter *TargetChr = GameWorld()->IntersectCharacter(PrevPos, CurPos, 6.0f, CurPos, OwnerChar);
 
 	m_LifeSpan--;
 
-	if(Collide || m_LifeSpan < 0 || GameLayerClipped(CurPos))
+	if(TargetChr || Collide || m_LifeSpan < 0 || GameLayerClipped(CurPos))
 	{
 		if(m_LifeSpan >= 0 || m_Weapon == WEAPON_GRENADE)
-			GameServer()->CreateSound(CurPos, m_SoundImpact, CmaskRace(GameServer(), m_Owner));
+			GameServer()->CreateSound(CurPos, m_SoundImpact);
 
 		if(m_Explosive)
-			GameServer()->CreateExplosion(CurPos, m_Owner, m_Weapon, false);
+			GameServer()->CreateExplosion(CurPos, m_Owner, m_Weapon, m_Damage);
 
-		/*else if(TargetChr)
-			TargetChr->TakeDamage(m_Direction * max(0.001f, m_Force), m_Damage, m_Owner, m_Weapon);*/
+		else if(TargetChr)
+			TargetChr->TakeDamage(m_Direction * max(0.001f, m_Force), m_Direction*-1, m_Damage, m_Owner, m_Weapon);
 
-		GameServer()->m_World.DestroyEntity(this);
-	}
-
-	if(m_Weapon == WEAPON_GRENADE && g_Config.m_SvTeleportGrenade)
-	{
-		int TilePos = GameServer()->Collision()->CheckRaceTile(PrevPos, CurPos, CCollision::RACECHECK_TELE);
-		int Tele = GameServer()->Collision()->CheckTeleport(TilePos);
-		if(Tele)
-		{
-			m_Pos = GameServer()->Collision()->GetTeleportDestination(Tele);
-			m_StartTick = Server()->Tick();
-		}
+		GameWorld()->DestroyEntity(this);
 	}
 }
 
@@ -108,10 +100,10 @@ void CProjectile::TickPaused()
 
 void CProjectile::FillInfo(CNetObj_Projectile *pProj)
 {
-	pProj->m_X = (int)m_Pos.x;
-	pProj->m_Y = (int)m_Pos.y;
-	pProj->m_VelX = (int)(m_Direction.x*100.0f);
-	pProj->m_VelY = (int)(m_Direction.y*100.0f);
+	pProj->m_X = round_to_int(m_Pos.x);
+	pProj->m_Y = round_to_int(m_Pos.y);
+	pProj->m_VelX = round_to_int(m_Direction.x*100.0f);
+	pProj->m_VelY = round_to_int(m_Direction.y*100.0f);
 	pProj->m_StartTick = m_StartTick;
 	pProj->m_Type = m_Type;
 }
@@ -120,11 +112,10 @@ void CProjectile::Snap(int SnappingClient)
 {
 	float Ct = (Server()->Tick()-m_StartTick)/(float)Server()->TickSpeed();
 
-	if(NetworkClipped(SnappingClient, GetPos(Ct)) || (GameServer()->m_apPlayers[SnappingClient] &&
-		!GameServer()->m_apPlayers[SnappingClient]->m_ShowOthers && SnappingClient != m_Owner))
+	if(NetworkClipped(SnappingClient, GetPos(Ct)))
 		return;
 
-	CNetObj_Projectile *pProj = static_cast<CNetObj_Projectile *>(Server()->SnapNewItem(NETOBJTYPE_PROJECTILE, m_ID, sizeof(CNetObj_Projectile)));
+	CNetObj_Projectile *pProj = static_cast<CNetObj_Projectile *>(Server()->SnapNewItem(NETOBJTYPE_PROJECTILE, GetID(), sizeof(CNetObj_Projectile)));
 	if(pProj)
 		FillInfo(pProj);
 }

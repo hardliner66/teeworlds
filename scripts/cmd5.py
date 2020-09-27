@@ -29,7 +29,7 @@ for filename in sys.argv[1:]:
 	f += cstrip([l.strip() for l in open(filename, "rb")])
 
 hash = hashlib.md5(f).hexdigest().lower()[16:]
-#TODO 0.7: improve nethash creation
-if hash == "fc9dffd45c6d100a":
-	hash = "626fce9a778df4d4"
+#TODO 0.8: improve nethash creation
+if hash == "cb14bf6dc197d153":
+	hash = "802f1be60a05665f"
 print('#define GAME_NETVERSION_HASH "%s"' % hash)

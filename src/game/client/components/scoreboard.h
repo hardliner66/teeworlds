@@ -1,3 +1,4 @@
+
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #ifndef GAME_CLIENT_COMPONENTS_SCOREBOARD_H
@@ -7,15 +8,18 @@
 class CScoreboard : public CComponent
 {
 	void RenderGoals(float x, float y, float w);
-	void RenderSpectators(float x, float y, float w);
-	void RenderScoreboard(float x, float y, float w, int Team, const char *pTitle);
-	void RenderRecordingNotification(float x);
+	float RenderSpectators(float x, float y, float w);
+	float RenderScoreboard(float x, float y, float w, int Team, const char *pTitle, int Align);
+	void RenderRecordingNotification(float x, float w);
+	void RenderNetworkQuality(float x, float w);
 
 	static void ConKeyScoreboard(IConsole::IResult *pResult, void *pUserData);
 
 	const char *GetClanName(int Team);
 
 	bool m_Active;
+	bool m_Activate;
+ 	class CUIRect m_TotalRect;
 
 public:
 	CScoreboard();
@@ -23,8 +27,10 @@ public:
 	virtual void OnConsoleInit();
 	virtual void OnRender();
 	virtual void OnRelease();
-
-	bool Active();
+	
+ 	bool IsActive() const;
+	void ResetPlayerStats(int ClientID);
+ 	class CUIRect GetScoreboardRect() const { return m_TotalRect; }
 };
 
 #endif

@@ -14,19 +14,17 @@ class CLayers
 	int m_LayersStart;
 	CMapItemGroup *m_pGameGroup;
 	CMapItemLayerTilemap *m_pGameLayer;
-	CMapItemLayerTilemap *m_pTeleLayer;
-	CMapItemLayerTilemap *m_pSpeedupLayer;
 	class IMap *m_pMap;
+	void InitTilemapSkip();
 
 public:
 	CLayers();
-	void Init(class IKernel *pKernel);
-	int NumGroups() const { return m_GroupsNum; }
-	class IMap *Map() const { return m_pMap; }
-	CMapItemGroup *GameGroup() const { return m_pGameGroup; }
-	CMapItemLayerTilemap *GameLayer() const { return m_pGameLayer; }
-	CMapItemLayerTilemap *TeleLayer() const { return m_pTeleLayer; }
-	CMapItemLayerTilemap *SpeedupLayer() const { return m_pSpeedupLayer; }
+	void Init(class IKernel *pKernel, class IMap *pMap=0);
+	int NumGroups() const { return m_GroupsNum; };
+	int NumLayers() const { return m_LayersNum; };
+	class IMap *Map() const { return m_pMap; };
+	CMapItemGroup *GameGroup() const { return m_pGameGroup; };
+	CMapItemLayerTilemap *GameLayer() const { return m_pGameLayer; };
 	CMapItemGroup *GetGroup(int Index) const;
 	CMapItemLayer *GetLayer(int Index) const;
 };

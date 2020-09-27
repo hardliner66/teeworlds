@@ -2,7 +2,6 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include <base/math.h>
 
-#include <engine/serverbrowser.h>
 #include <engine/shared/config.h>
 
 #include <game/collision.h>
@@ -16,11 +15,6 @@
 
 CControls::CControls()
 {
-	m_MousePos = vec2(0,0);
-	m_TargetPos = vec2(0,0);
-	m_InputDirectionLeft = 0;
-	m_InputDirectionRight = 0;
-	mem_zero(&m_InputData, sizeof(m_InputData));
 	mem_zero(&m_LastData, sizeof(m_LastData));
 }
 
@@ -46,9 +40,7 @@ void CControls::OnRelease()
 
 void CControls::OnPlayerDeath()
 {
-	CServerInfo ServerInfo;
-	Client()->GetServerInfo(&ServerInfo);
-	if(!IsRace(&ServerInfo))
+	if(!m_pClient->m_Snap.m_pGameDataRace || !(m_pClient->m_Snap.m_pGameDataRace->m_RaceFlags&RACEFLAG_KEEP_WANTED_WEAPON))
 		m_LastData.m_WantedWeapon = m_InputData.m_WantedWeapon = 0;
 }
 
@@ -99,7 +91,7 @@ void CControls::OnConsoleInit()
 	{ static CInputSet s_Set = {this, &m_InputData.m_WantedWeapon, 2}; Console()->Register("+weapon2", "", CFGFLAG_CLIENT, ConKeyInputSet, (void *)&s_Set, "Switch to gun"); }
 	{ static CInputSet s_Set = {this, &m_InputData.m_WantedWeapon, 3}; Console()->Register("+weapon3", "", CFGFLAG_CLIENT, ConKeyInputSet, (void *)&s_Set, "Switch to shotgun"); }
 	{ static CInputSet s_Set = {this, &m_InputData.m_WantedWeapon, 4}; Console()->Register("+weapon4", "", CFGFLAG_CLIENT, ConKeyInputSet, (void *)&s_Set, "Switch to grenade"); }
-	{ static CInputSet s_Set = {this, &m_InputData.m_WantedWeapon, 5}; Console()->Register("+weapon5", "", CFGFLAG_CLIENT, ConKeyInputSet, (void *)&s_Set, "Switch to rifle"); }
+	{ static CInputSet s_Set = {this, &m_InputData.m_WantedWeapon, 5}; Console()->Register("+weapon5", "", CFGFLAG_CLIENT, ConKeyInputSet, (void *)&s_Set, "Switch to laser"); }
 
 	{ static CInputSet s_Set = {this, &m_InputData.m_NextWeapon, 0}; Console()->Register("+nextweapon", "", CFGFLAG_CLIENT, ConKeyInputNextPrevWeapon, (void *)&s_Set, "Switch to next weapon"); }
 	{ static CInputSet s_Set = {this, &m_InputData.m_PrevWeapon, 0}; Console()->Register("+prevweapon", "", CFGFLAG_CLIENT, ConKeyInputNextPrevWeapon, (void *)&s_Set, "Switch to previous weapon"); }
@@ -110,7 +102,7 @@ void CControls::OnMessage(int Msg, void *pRawMsg)
 	if(Msg == NETMSGTYPE_SV_WEAPONPICKUP)
 	{
 		CNetMsg_Sv_WeaponPickup *pMsg = (CNetMsg_Sv_WeaponPickup *)pRawMsg;
-		if(g_Config.m_ClAutoswitchWeapons)
+		if(Config()->m_ClAutoswitchWeapons)
 			m_InputData.m_WantedWeapon = pMsg->m_Weapon+1;
 	}
 }
@@ -123,12 +115,10 @@ int CControls::SnapInput(int *pData)
 	// update player state
 	if(m_pClient->m_pChat->IsActive())
 		m_InputData.m_PlayerFlags = PLAYERFLAG_CHATTING;
-	else if(m_pClient->m_pMenus->IsActive())
-		m_InputData.m_PlayerFlags = PLAYERFLAG_IN_MENU;
 	else
-		m_InputData.m_PlayerFlags = PLAYERFLAG_PLAYING;
+		m_InputData.m_PlayerFlags = 0;
 
-	if(m_pClient->m_pScoreboard->Active())
+	if(m_pClient->m_pScoreboard->IsActive())
 		m_InputData.m_PlayerFlags |= PLAYERFLAG_SCOREBOARD;
 
 	if(m_LastData.m_PlayerFlags != m_InputData.m_PlayerFlags)
@@ -137,7 +127,7 @@ int CControls::SnapInput(int *pData)
 	m_LastData.m_PlayerFlags = m_InputData.m_PlayerFlags;
 
 	// we freeze the input if chat or menu is activated
-	if(!(m_InputData.m_PlayerFlags&PLAYERFLAG_PLAYING))
+	if(m_pClient->m_pChat->IsActive() || m_pClient->m_pMenus->IsActive())
 	{
 		OnReset();
 
@@ -149,7 +139,6 @@ int CControls::SnapInput(int *pData)
 	}
 	else
 	{
-
 		m_InputData.m_TargetX = (int)m_MousePos.x;
 		m_InputData.m_TargetY = (int)m_MousePos.y;
 		if(!m_InputData.m_TargetX && !m_InputData.m_TargetY)
@@ -166,13 +155,13 @@ int CControls::SnapInput(int *pData)
 			m_InputData.m_Direction = 1;
 
 		// stress testing
-		if(g_Config.m_DbgStress)
+		if(Config()->m_DbgStress)
 		{
 			float t = Client()->LocalTime();
 			mem_zero(&m_InputData, sizeof(m_InputData));
 
-			m_InputData.m_Direction = ((int)t/2)&1;
-			m_InputData.m_Jump = ((int)t);
+			m_InputData.m_Direction = ((int)t/2)%3-1;
+			m_InputData.m_Jump = ((int)t)&1;
 			m_InputData.m_Fire = ((int)(t*10));
 			m_InputData.m_Hook = ((int)(t*2))&1;
 			m_InputData.m_WantedWeapon = ((int)t)%NUM_WEAPONS;
@@ -207,8 +196,10 @@ int CControls::SnapInput(int *pData)
 
 void CControls::OnRender()
 {
+	ClampMousePos();
+
 	// update target pos
-	if(m_pClient->m_Snap.m_pGameInfoObj && !m_pClient->m_Snap.m_SpecInfo.m_Active)
+	if(m_pClient->m_Snap.m_pGameData && !m_pClient->m_Snap.m_SpecInfo.m_Active)
 		m_TargetPos = m_pClient->m_LocalCharacterPos + m_MousePos;
 	else if(m_pClient->m_Snap.m_SpecInfo.m_Active && m_pClient->m_Snap.m_SpecInfo.m_UsePosition)
 		m_TargetPos = m_pClient->m_Snap.m_SpecInfo.m_Position + m_MousePos;
@@ -216,15 +207,23 @@ void CControls::OnRender()
 		m_TargetPos = m_MousePos;
 }
 
-bool CControls::OnMouseMove(float x, float y)
+bool CControls::OnCursorMove(float x, float y, int CursorType)
 {
-	if((m_pClient->m_Snap.m_pGameInfoObj && m_pClient->m_Snap.m_pGameInfoObj->m_GameStateFlags&GAMESTATEFLAG_PAUSED) ||
-		(m_pClient->m_Snap.m_SpecInfo.m_Active && m_pClient->m_pChat->IsActive()))
+	if(m_pClient->IsWorldPaused() || (m_pClient->m_Snap.m_SpecInfo.m_Active && m_pClient->m_pChat->IsActive()))
 		return false;
 
-	m_MousePos += vec2(x, y); // TODO: ugly
-	ClampMousePos();
+	float Factor = 1.0f;
+	switch(CursorType)
+	{
+		case IInput::CURSOR_MOUSE:
+			Factor = Config()->m_InpMousesens/100.0f;
+			break;
+		case IInput::CURSOR_JOYSTICK:
+			Factor = Config()->m_JoystickSens/100.0f;
+			break;
+	}
 
+	m_MousePos += vec2(x, y) * Factor;
 	return true;
 }
 
@@ -234,13 +233,18 @@ void CControls::ClampMousePos()
 	{
 		m_MousePos.x = clamp(m_MousePos.x, 200.0f, Collision()->GetWidth()*32-200.0f);
 		m_MousePos.y = clamp(m_MousePos.y, 200.0f, Collision()->GetHeight()*32-200.0f);
-
 	}
 	else
 	{
-		float CameraMaxDistance = 200.0f;
-		float FollowFactor = g_Config.m_ClMouseFollowfactor/100.0f;
-		float MouseMax = min(CameraMaxDistance/FollowFactor + g_Config.m_ClMouseDeadzone, (float)g_Config.m_ClMouseMaxDistance);
+		float MouseMax;
+		if(Config()->m_ClDynamicCamera)
+		{
+			float CameraMaxDistance = 200.0f;
+			float FollowFactor = Config()->m_ClMouseFollowfactor/100.0f;
+			MouseMax = min(CameraMaxDistance/FollowFactor + Config()->m_ClMouseDeadzone, (float)Config()->m_ClMouseMaxDistanceDynamic);
+		}
+		else
+			MouseMax = (float)Config()->m_ClMouseMaxDistanceStatic;
 
 		if(length(m_MousePos) > MouseMax)
 			m_MousePos = normalize(m_MousePos)*MouseMax;

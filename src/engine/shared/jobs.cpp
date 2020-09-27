@@ -6,19 +6,20 @@
 CJobPool::CJobPool()
 {
 	// empty the pool
+	m_NumThreads = 0;
+	m_Shutdown = false;
 	m_Lock = lock_create();
 	m_pFirstJob = 0;
 	m_pLastJob = 0;
-	m_Shutdown = false;
 }
 
 CJobPool::~CJobPool()
 {
 	m_Shutdown = true;
-	for(int i = 0; i < m_lThreads.size(); i++)
+	for(int i = 0; i < m_NumThreads; i++)
 	{
-		thread_wait(m_lThreads[i]);
-		thread_destroy(m_lThreads[i]);
+		thread_wait(m_apThreads[i]);
+		thread_destroy(m_apThreads[i]);
 	}
 	lock_destroy(m_Lock);
 }
@@ -60,9 +61,9 @@ void CJobPool::WorkerThread(void *pUser)
 int CJobPool::Init(int NumThreads)
 {
 	// start threads
-	m_lThreads.set_size(NumThreads);
-	for(int i = 0; i < NumThreads; i++)
-		m_lThreads[i] = thread_init(WorkerThread, this);
+	m_NumThreads = NumThreads > MAX_THREADS ? MAX_THREADS : NumThreads;
+	for(int i = 0; i < m_NumThreads; i++)
+		m_apThreads[i] = thread_init(WorkerThread, this);
 	return 0;
 }
 

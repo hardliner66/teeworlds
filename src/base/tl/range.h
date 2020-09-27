@@ -138,11 +138,6 @@ public:
 		end = 0x0;
 	}
 
-	plain_range(const plain_range &r)
-	{
-		*this = r;
-	}
-
 	plain_range(T *b, T *e)
 	{
 		begin = b;
@@ -183,11 +178,6 @@ public:
 
 	plain_range_sorted()
 	{}
-
-	plain_range_sorted(const plain_range_sorted &r)
-	: parent(r)
-	{
-	}
 
 	plain_range_sorted(T *b, T *e)
 	: parent(b, e)
@@ -231,4 +221,4 @@ template<class R> R reverse(reverse_range<R> range) {
 	return range.range;
 }
 
-#endif // TL_FILE_RANGE_HPP
+#endif // BASE_TL_RANGE_H

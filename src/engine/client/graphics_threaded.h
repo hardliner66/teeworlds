@@ -40,8 +40,8 @@ class CCommandBuffer
 		}
 
 		unsigned char *DataPtr() { return m_pData; }
-		unsigned DataSize() { return m_Size; }
-		unsigned DataUsed() { return m_Used; }
+		unsigned DataSize() const { return m_Size; }
+		unsigned DataUsed() const { return m_Used; }
 	};
 
 public:
@@ -82,8 +82,8 @@ public:
 		CMD_SWAP,
 
 		// misc
+		CMD_VSYNC,
 		CMD_SCREENSHOT,
-		CMD_VIDEOMODES,
 
 	};
 
@@ -97,13 +97,16 @@ public:
 		TEXFLAG_NOMIPMAPS = 1,
 		TEXFLAG_COMPRESSED = 2,
 		TEXFLAG_QUALITY = 4,
+		TEXFLAG_TEXTURE3D = 8,
+		TEXFLAG_TEXTURE2D = 16,
+		TEXTFLAG_LINEARMIPMAPS = 32,
 	};
 
 	enum
 	{
 		//
 		PRIMTYPE_INVALID = 0,
-		PRIMTYPE_LINES,	
+		PRIMTYPE_LINES,
 		PRIMTYPE_QUADS,
 	};
 
@@ -114,38 +117,35 @@ public:
 		BLEND_ADDITIVE,
 	};
 
-	enum
+	struct CPoint { float x, y; };
+	struct CTexCoord { float u, v, i; };
+	struct CColor { float r, g, b, a; };
+
+	struct CVertex
 	{
-		WRAP_REPEAT = 0,
-		WRAP_CLAMP,
+		CPoint m_Pos;
+		CTexCoord m_Tex;
+		CColor m_Color;
 	};
 
-	struct SPoint { float x, y, z; };
-	struct STexCoord { float u, v; };
-	struct SColor { float r, g, b, a; };
-
-	struct SVertex
-	{
-		SPoint m_Pos;
-		STexCoord m_Tex;
-		SColor m_Color;
-	};
-
-	struct SCommand
+	struct CCommand
 	{
 	public:
-		SCommand(unsigned Cmd) : m_Cmd(Cmd), m_Size(0) {}
+		CCommand(unsigned Cmd) : m_Cmd(Cmd), m_Size(0) {}
 		unsigned m_Cmd;
 		unsigned m_Size;
 	};
 
-	struct SState
+	struct CState
 	{
 		int m_BlendMode;
-		int m_WrapMode;
+		int m_WrapModeU;
+		int m_WrapModeV;
 		int m_Texture;
-		SPoint m_ScreenTL;
-		SPoint m_ScreenBR;
+		int m_TextureArrayIndex;
+		int m_Dimension;
+		CPoint m_ScreenTL;
+		CPoint m_ScreenBR;
 
 		// clip
 		bool m_ClipEnable;
@@ -154,59 +154,59 @@ public:
 		int m_ClipW;
 		int m_ClipH;
 	};
-		
-	struct SCommand_Clear : public SCommand
+
+	struct CClearCommand : public CCommand
 	{
-		SCommand_Clear() : SCommand(CMD_CLEAR) {}
-		SColor m_Color;
+		CClearCommand() : CCommand(CMD_CLEAR) {}
+		CColor m_Color;
 	};
-		
-	struct SCommand_Signal : public SCommand
+
+	struct CSignalCommand : public CCommand
 	{
-		SCommand_Signal() : SCommand(CMD_SIGNAL) {}
+		CSignalCommand() : CCommand(CMD_SIGNAL) {}
 		semaphore *m_pSemaphore;
 	};
 
-	struct SCommand_RunBuffer : public SCommand
+	struct CRunBufferCommand : public CCommand
 	{
-		SCommand_RunBuffer() : SCommand(CMD_RUNBUFFER) {}
+		CRunBufferCommand() : CCommand(CMD_RUNBUFFER) {}
 		CCommandBuffer *m_pOtherBuffer;
 	};
 
-	struct SCommand_Render : public SCommand
+	struct CRenderCommand : public CCommand
 	{
-		SCommand_Render() : SCommand(CMD_RENDER) {}
-		SState m_State;
+		CRenderCommand() : CCommand(CMD_RENDER) {}
+		CState m_State;
 		unsigned m_PrimType;
 		unsigned m_PrimCount;
-		SVertex *m_pVertices; // you should use the command buffer data to allocate vertices for this command
+		CVertex *m_pVertices; // you should use the command buffer data to allocate vertices for this command
 	};
 
-	struct SCommand_Screenshot : public SCommand
+	struct CScreenshotCommand : public CCommand
 	{
-		SCommand_Screenshot() : SCommand(CMD_SCREENSHOT) {}
+		CScreenshotCommand() : CCommand(CMD_SCREENSHOT) {}
+		int m_X, m_Y, m_W, m_H; // specify rectangle size, -1 if fullscreen (width/height)
 		CImageInfo *m_pImage; // processor will fill this out, the one who adds this command must free the data as well
 	};
 
-	struct SCommand_VideoModes : public SCommand
+	struct CSwapCommand : public CCommand
 	{
-		SCommand_VideoModes() : SCommand(CMD_VIDEOMODES) {}
-
-		CVideoMode *m_pModes; // processor will fill this in
-		int m_MaxModes; // maximum of modes the processor can write to the m_pModes
-		int *m_pNumModes; // processor will write to this pointer
-	};
-
-	struct SCommand_Swap : public SCommand
-	{
-		SCommand_Swap() : SCommand(CMD_SWAP) {}
+		CSwapCommand() : CCommand(CMD_SWAP) {}
 
 		int m_Finish;
 	};
 
-	struct SCommand_Texture_Create : public SCommand
+	struct CVSyncCommand : public CCommand
 	{
-		SCommand_Texture_Create() : SCommand(CMD_TEXTURE_CREATE) {}
+		CVSyncCommand() : CCommand(CMD_VSYNC) {}
+
+		int m_VSync;
+		bool *m_pRetOk;
+	};
+
+	struct CTextureCreateCommand : public CCommand
+	{
+		CTextureCreateCommand() : CCommand(CMD_TEXTURE_CREATE) {}
 
 		// texture information
 		int m_Slot;
@@ -220,9 +220,9 @@ public:
 		void *m_pData; // will be freed by the command processor
 	};
 
-	struct SCommand_Texture_Update : public SCommand
+	struct CTextureUpdateCommand : public CCommand
 	{
-		SCommand_Texture_Update() : SCommand(CMD_TEXTURE_UPDATE) {}
+		CTextureUpdateCommand() : CCommand(CMD_TEXTURE_UPDATE) {}
 
 		// texture information
 		int m_Slot;
@@ -236,14 +236,14 @@ public:
 	};
 
 
-	struct SCommand_Texture_Destroy : public SCommand
+	struct CTextureDestroyCommand : public CCommand
 	{
-		SCommand_Texture_Destroy() : SCommand(CMD_TEXTURE_DESTROY) {}
+		CTextureDestroyCommand() : CCommand(CMD_TEXTURE_DESTROY) {}
 
 		// texture information
 		int m_Slot;
 	};
-	
+
 	//
 	CCommandBuffer(unsigned CmdBufferSize, unsigned DataBufferSize)
 	: m_CmdBuffer(CmdBufferSize), m_DataBuffer(DataBufferSize)
@@ -259,10 +259,10 @@ public:
 	bool AddCommand(const T &Command)
 	{
 		// make sure that we don't do something stupid like ->AddCommand(&Cmd);
-		(void)static_cast<const SCommand *>(&Command);
+		(void)static_cast<const CCommand *>(&Command);
 
 		// allocate and copy the command into the buffer
-		SCommand *pCmd = (SCommand *)m_CmdBuffer.Alloc(sizeof(Command));
+		CCommand *pCmd = (CCommand *)m_CmdBuffer.Alloc(sizeof(Command));
 		if(!pCmd)
 			return false;
 		mem_copy(pCmd, &Command, sizeof(Command));
@@ -270,12 +270,12 @@ public:
 		return true;
 	}
 
-	SCommand *GetCommand(unsigned *pIndex)
+	CCommand *GetCommand(unsigned *pIndex)
 	{
 		if(*pIndex >= m_CmdBuffer.DataUsed())
 			return NULL;
 
-		SCommand *pCommand = (SCommand *)&m_CmdBuffer.DataPtr()[*pIndex];
+		CCommand *pCommand = (CCommand *)&m_CmdBuffer.DataPtr()[*pIndex];
 		*pIndex += pCommand->m_Size;
 		return pCommand;
 	}
@@ -298,17 +298,28 @@ public:
 		INITFLAG_VSYNC = 2,
 		INITFLAG_RESIZABLE = 4,
 		INITFLAG_BORDERLESS = 8,
+		INITFLAG_X11XRANDR = 16,
+		INITFLAG_HIGHDPI = 32,
 	};
 
 	virtual ~IGraphicsBackend() {}
 
-	virtual int Init(const char *pName, int *Width, int *Height, int FsaaSamples, int Flags) = 0;
+	virtual int Init(const char *pName, int *Screen, int *pWindowWidth, int *pWindowHeight, int *pScreenWidth, int *pScreenHeight, int FsaaSamples, int Flags, int *pDesktopWidth, int *pDesktopHeight) = 0;
 	virtual int Shutdown() = 0;
 
 	virtual int MemoryUsage() const = 0;
+	virtual int GetTextureArraySize() const = 0;
+
+	virtual int GetNumScreens() const = 0;
 
 	virtual void Minimize() = 0;
 	virtual void Maximize() = 0;
+	virtual bool Fullscreen(bool State) = 0;
+	virtual void SetWindowBordered(bool State) = 0;
+	virtual bool SetWindowScreen(int Index) = 0;
+	virtual int GetVideoModes(CVideoMode *pModes, int MaxModes, int Screen) = 0;
+	virtual bool GetDesktopResolution(int Index, int *pDesktopWidth, int* pDesktopHeight) = 0;
+	virtual int GetWindowScreen() = 0;
 	virtual int WindowActive() = 0;
 	virtual int WindowOpen() = 0;
 
@@ -325,12 +336,12 @@ class CGraphics_Threaded : public IEngineGraphics
 
 		MAX_VERTICES = 32*1024,
 		MAX_TEXTURES = 1024*4,
-		
+
 		DRAWING_QUADS=1,
 		DRAWING_LINES=2
 	};
 
-	CCommandBuffer::SState m_State;
+	CCommandBuffer::CState m_State;
 	IGraphicsBackend *m_pBackend;
 
 	CCommandBuffer *m_apCommandBuffers[NUM_CMDBUFFERS];
@@ -339,13 +350,14 @@ class CGraphics_Threaded : public IEngineGraphics
 
 	//
 	class IStorage *m_pStorage;
+	class CConfig *m_pConfig;
 	class IConsole *m_pConsole;
 
-	CCommandBuffer::SVertex m_aVertices[MAX_VERTICES];
+	CCommandBuffer::CVertex m_aVertices[MAX_VERTICES];
 	int m_NumVertices;
 
-	CCommandBuffer::SColor m_aColor[4];
-	CCommandBuffer::STexCoord m_aTexture[4];
+	CCommandBuffer::CColor m_aColor[4];
+	CCommandBuffer::CTexCoord m_aTexture[4];
 
 	bool m_RenderEnable;
 
@@ -354,15 +366,16 @@ class CGraphics_Threaded : public IEngineGraphics
 	bool m_DoScreenshot;
 	char m_aScreenshotName[128];
 
-	int m_InvalidTexture;
+	CTextureHandle m_InvalidTexture;
 
+	int m_TextureArrayIndex;
 	int m_aTextureIndices[MAX_TEXTURES];
 	int m_FirstFreeTexture;
 	int m_TextureMemoryUsage;
 
 	void FlushVertices();
 	void AddVertices(int Count);
-	void Rotate4(const CCommandBuffer::SPoint &rCenter, CCommandBuffer::SVertex *pPoints);
+	void Rotate4(const CCommandBuffer::CPoint &rCenter, CCommandBuffer::CVertex *pPoints);
 
 	void KickCommandBuffer();
 
@@ -380,6 +393,7 @@ public:
 
 	virtual void WrapNormal();
 	virtual void WrapClamp();
+	virtual void WrapMode(int WrapU, int WrapV);
 
 	virtual int MemoryUsage() const;
 
@@ -390,17 +404,17 @@ public:
 	virtual void LinesEnd();
 	virtual void LinesDraw(const CLineItem *pArray, int Num);
 
-	virtual int UnloadTexture(int Index);
-	virtual int LoadTextureRaw(int Width, int Height, int Format, const void *pData, int StoreFormat, int Flags);
-	virtual int LoadTextureRawSub(int TextureID, int x, int y, int Width, int Height, int Format, const void *pData);
+	virtual int UnloadTexture(IGraphics::CTextureHandle *Index);
+	virtual IGraphics::CTextureHandle LoadTextureRaw(int Width, int Height, int Format, const void *pData, int StoreFormat, int Flags);
+	virtual int LoadTextureRawSub(IGraphics::CTextureHandle TextureID, int x, int y, int Width, int Height, int Format, const void *pData);
 
 	// simple uncompressed RGBA loaders
-	virtual int LoadTexture(const char *pFilename, int StorageType, int StoreFormat, int Flags);
+	virtual IGraphics::CTextureHandle LoadTexture(const char *pFilename, int StorageType, int StoreFormat, int Flags);
 	virtual int LoadPNG(CImageInfo *pImg, const char *pFilename, int StorageType);
 
 	void ScreenshotDirect(const char *pFilename);
 
-	virtual void TextureSet(int TextureID);
+	virtual void TextureSet(CTextureHandle TextureID);
 
 	virtual void Clear(float r, float g, float b);
 
@@ -410,19 +424,26 @@ public:
 
 	virtual void SetColorVertex(const CColorVertex *pArray, int Num);
 	virtual void SetColor(float r, float g, float b, float a);
+	virtual void SetColor4(const vec4 &TopLeft, const vec4 &TopRight, const vec4 &BottomLeft, const vec4 &BottomRight);
 
-	virtual void QuadsSetSubset(float TlU, float TlV, float BrU, float BrV);
+	void TilesetFallbackSystem(int TextureIndex);
+	virtual void QuadsSetSubset(float TlU, float TlV, float BrU, float BrV, int TextureIndex = -1);
 	virtual void QuadsSetSubsetFree(
 		float x0, float y0, float x1, float y1,
-		float x2, float y2, float x3, float y3);
+		float x2, float y2, float x3, float y3, int TextureIndex = -1);
 
 	virtual void QuadsDraw(CQuadItem *pArray, int Num);
 	virtual void QuadsDrawTL(const CQuadItem *pArray, int Num);
 	virtual void QuadsDrawFreeform(const CFreeformItem *pArray, int Num);
 	virtual void QuadsText(float x, float y, float Size, const char *pText);
 
+	virtual int GetNumScreens() const;
 	virtual void Minimize();
 	virtual void Maximize();
+	virtual bool Fullscreen(bool State);
+	virtual void SetWindowBordered(bool State);
+	virtual bool SetWindowScreen(int Index);
+	virtual int GetWindowScreen();
 
 	virtual int WindowActive();
 	virtual int WindowOpen();
@@ -430,14 +451,16 @@ public:
 	virtual int Init();
 	virtual void Shutdown();
 
+	virtual void ReadBackbuffer(unsigned char **ppPixels, int x, int y, int w, int h);
 	virtual void TakeScreenshot(const char *pFilename);
 	virtual void Swap();
+	virtual bool SetVSync(bool State);
 
-	virtual int GetVideoModes(CVideoMode *pModes, int MaxModes);
+	virtual int GetVideoModes(CVideoMode *pModes, int MaxModes, int Screen);
 
 	// syncronization
 	virtual void InsertSignal(semaphore *pSemaphore);
-	virtual bool IsIdle();
+	virtual bool IsIdle() const;
 	virtual void WaitForIdle();
 };
 

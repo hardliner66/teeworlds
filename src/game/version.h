@@ -2,11 +2,12 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #ifndef GAME_VERSION_H
 #define GAME_VERSION_H
-#include <game/generated/nethash.cpp>
-#define GAME_VERSION "0.6.5, Race " RACE_VERSION
-//#define GAME_NETVERSION "0.6 " GAME_NETVERSION_HASH
-#define GAME_NETVERSION "0.6 626fce9a778df4d4"
-#define RACE_VERSION "3.6"
-#define TEERACE_GAMESERVER_VERSION "1"
-static const char GAME_RELEASE_VERSION[8] = "0.6.5";
+#include <generated/nethash.cpp>
+#define GAME_VERSION "0.7.5"
+#define GAME_NETVERSION_HASH_FORCED "802f1be60a05665f"
+#define GAME_NETVERSION "0.7 " GAME_NETVERSION_HASH_FORCED
+#define CLIENT_VERSION 0x0705
+#define PREV_CLIENT_VERSION 0x0704
+#define SETTINGS_FILENAME "settings07"
+static const char GAME_RELEASE_VERSION[8] = "0.7.5";
 #endif

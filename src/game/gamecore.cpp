@@ -1,9 +1,6 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
-#include <engine/shared/config.h>
-
 #include "gamecore.h"
-#include "mapitems.h"
 
 const char *CTuningParams::m_apNames[] =
 {
@@ -21,7 +18,7 @@ bool CTuningParams::Set(int Index, float Value)
 	return true;
 }
 
-bool CTuningParams::Get(int Index, float *pValue)
+bool CTuningParams::Get(int Index, float *pValue) const
 {
 	if(Index < 0 || Index >= Num())
 		return false;
@@ -37,7 +34,7 @@ bool CTuningParams::Set(const char *pName, float Value)
 	return false;
 }
 
-bool CTuningParams::Get(const char *pName, float *pValue)
+bool CTuningParams::Get(const char *pName, float *pValue) const
 {
 	for(int i = 0; i < Num(); i++)
 		if(str_comp_nocase(pName, m_apNames[i]) == 0)
@@ -58,22 +55,19 @@ float VelocityRamp(float Value, float Start, float Range, float Curvature)
 	return 1.0f/powf(Curvature, (Value-Start)/Range);
 }
 
+const float CCharacterCore::PHYS_SIZE = 28.0f;
+
 void CCharacterCore::Init(CWorldCore *pWorld, CCollision *pCollision)
 {
 	m_pWorld = pWorld;
 	m_pCollision = pCollision;
-
-	mem_zero(&m_Input, sizeof(m_Input));
-	m_Teleported = false;
-	m_SpeedupTouch = false;
-	m_LastSpeedup = -1;
 }
 
 void CCharacterCore::Reset()
 {
 	m_Pos = vec2(0,0);
-	m_PrevPos = vec2(0,0);
 	m_Vel = vec2(0,0);
+	m_HookDragVel = vec2(0,0);
 	m_HookPos = vec2(0,0);
 	m_HookDir = vec2(0,0);
 	m_HookTick = 0;
@@ -81,21 +75,18 @@ void CCharacterCore::Reset()
 	m_HookedPlayer = -1;
 	m_Jumped = 0;
 	m_TriggeredEvents = 0;
-	m_Direction = 0;
+	m_Death = false;
 }
 
 void CCharacterCore::Tick(bool UseInput)
 {
-	float PhysSize = 28.0f;
 	m_TriggeredEvents = 0;
-
-	int Jumped = m_Jumped;
 
 	// get ground state
 	bool Grounded = false;
-	if(m_pCollision->CheckPoint(m_Pos.x+PhysSize/2, m_Pos.y+PhysSize/2+5))
+	if(m_pCollision->CheckPoint(m_Pos.x+PHYS_SIZE/2, m_Pos.y+PHYS_SIZE/2+5))
 		Grounded = true;
-	if(m_pCollision->CheckPoint(m_Pos.x-PhysSize/2, m_Pos.y+PhysSize/2+5))
+	if(m_pCollision->CheckPoint(m_Pos.x-PHYS_SIZE/2, m_Pos.y+PHYS_SIZE/2+5))
 		Grounded = true;
 
 	vec2 TargetDirection = normalize(vec2(m_Input.m_TargetX, m_Input.m_TargetY));
@@ -110,18 +101,7 @@ void CCharacterCore::Tick(bool UseInput)
 	if(UseInput)
 	{
 		m_Direction = m_Input.m_Direction;
-
-		// setup angle
-		float a = 0;
-		if(m_Input.m_TargetX == 0)
-			a = atanf((float)m_Input.m_TargetY);
-		else
-			a = atanf((float)m_Input.m_TargetY/(float)m_Input.m_TargetX);
-
-		if(m_Input.m_TargetX < 0)
-			a = a+pi;
-
-		m_Angle = (int)(a*256.0f);
+		m_Angle = (int)(angle(vec2(m_Input.m_TargetX, m_Input.m_TargetY))*256.0f);
 
 		// handle jump
 		if(m_Input.m_Jump)
@@ -130,13 +110,13 @@ void CCharacterCore::Tick(bool UseInput)
 			{
 				if(Grounded)
 				{
-					m_TriggeredEvents |= COREEVENT_GROUND_JUMP;
+					m_TriggeredEvents |= COREEVENTFLAG_GROUND_JUMP;
 					m_Vel.y = -m_pWorld->m_Tuning.m_GroundJumpImpulse;
 					m_Jumped |= 1;
 				}
 				else if(!(m_Jumped&2))
 				{
-					m_TriggeredEvents |= COREEVENT_AIR_JUMP;
+					m_TriggeredEvents |= COREEVENTFLAG_AIR_JUMP;
 					m_Vel.y = -m_pWorld->m_Tuning.m_AirJumpImpulse;
 					m_Jumped |= 3;
 				}
@@ -151,11 +131,11 @@ void CCharacterCore::Tick(bool UseInput)
 			if(m_HookState == HOOK_IDLE)
 			{
 				m_HookState = HOOK_FLYING;
-				m_HookPos = m_Pos+TargetDirection*PhysSize*1.5f;
+				m_HookPos = m_Pos+TargetDirection*PHYS_SIZE*1.5f;
 				m_HookDir = TargetDirection;
 				m_HookedPlayer = -1;
 				m_HookTick = 0;
-				m_TriggeredEvents |= COREEVENT_HOOK_LAUNCH;
+				//m_TriggeredEvents |= COREEVENTFLAG_HOOK_LAUNCH;
 			}
 		}
 		else
@@ -194,8 +174,7 @@ void CCharacterCore::Tick(bool UseInput)
 	else if(m_HookState == HOOK_RETRACT_END)
 	{
 		m_HookState = HOOK_RETRACTED;
-		m_TriggeredEvents |= COREEVENT_HOOK_RETRACT;
-		m_HookState = HOOK_RETRACTED;
+		//m_TriggeredEvents |= COREEVENTFLAG_HOOK_RETRACT;
 	}
 	else if(m_HookState == HOOK_FLYING)
 	{
@@ -229,11 +208,11 @@ void CCharacterCore::Tick(bool UseInput)
 					continue;
 
 				vec2 ClosestPoint = closest_point_on_line(m_HookPos, NewPos, pCharCore->m_Pos);
-				if(distance(pCharCore->m_Pos, ClosestPoint) < PhysSize+2.0f)
+				if(distance(pCharCore->m_Pos, ClosestPoint) < PHYS_SIZE+2.0f)
 				{
 					if (m_HookedPlayer == -1 || distance(m_HookPos, pCharCore->m_Pos) < Distance)
 					{
-						m_TriggeredEvents |= COREEVENT_HOOK_ATTACH_PLAYER;
+						m_TriggeredEvents |= COREEVENTFLAG_HOOK_ATTACH_PLAYER;
 						m_HookState = HOOK_GRABBED;
 						m_HookedPlayer = i;
 						Distance = distance(m_HookPos, pCharCore->m_Pos);
@@ -247,12 +226,12 @@ void CCharacterCore::Tick(bool UseInput)
 			// check against ground
 			if(GoingToHitGround)
 			{
-				m_TriggeredEvents |= COREEVENT_HOOK_ATTACH_GROUND;
+				m_TriggeredEvents |= COREEVENTFLAG_HOOK_ATTACH_GROUND;
 				m_HookState = HOOK_GRABBED;
 			}
 			else if(GoingToRetract)
 			{
-				m_TriggeredEvents |= COREEVENT_HOOK_HIT_NOHOOK;
+				m_TriggeredEvents |= COREEVENTFLAG_HOOK_HIT_NOHOOK;
 				m_HookState = HOOK_RETRACT_START;
 			}
 
@@ -329,9 +308,9 @@ void CCharacterCore::Tick(bool UseInput)
 			// handle player <-> player collision
 			float Distance = distance(m_Pos, pCharCore->m_Pos);
 			vec2 Dir = normalize(m_Pos - pCharCore->m_Pos);
-			if(m_pWorld->m_Tuning.m_PlayerCollision && Distance < PhysSize*1.25f && Distance > 0.0f)
+			if(m_pWorld->m_Tuning.m_PlayerCollision && Distance < PHYS_SIZE*1.25f && Distance > 0.0f)
 			{
-				float a = (PhysSize*1.45f - Distance);
+				float a = (PHYS_SIZE*1.45f - Distance);
 				float Velocity = 0.5f;
 
 				// make sure that we don't add excess force by checking the
@@ -346,18 +325,15 @@ void CCharacterCore::Tick(bool UseInput)
 			// handle hook influence
 			if(m_HookedPlayer == i && m_pWorld->m_Tuning.m_PlayerHooking)
 			{
-				if(Distance > PhysSize*1.50f) // TODO: fix tweakable variable
+				if(Distance > PHYS_SIZE*1.50f) // TODO: fix tweakable variable
 				{
 					float Accel = m_pWorld->m_Tuning.m_HookDragAccel * (Distance/m_pWorld->m_Tuning.m_HookLength);
-					float DragSpeed = m_pWorld->m_Tuning.m_HookDragSpeed;
 
 					// add force to the hooked player
-					pCharCore->m_Vel.x = SaturatedAdd(-DragSpeed, DragSpeed, pCharCore->m_Vel.x, Accel*Dir.x*1.5f);
-					pCharCore->m_Vel.y = SaturatedAdd(-DragSpeed, DragSpeed, pCharCore->m_Vel.y, Accel*Dir.y*1.5f);
+					pCharCore->m_HookDragVel += Dir*Accel*1.5f;
 
 					// add a little bit force to the guy who has the grip
-					m_Vel.x = SaturatedAdd(-DragSpeed, DragSpeed, m_Vel.x, -Accel*Dir.x*0.25f);
-					m_Vel.y = SaturatedAdd(-DragSpeed, DragSpeed, m_Vel.y, -Accel*Dir.y*0.25f);
+					m_HookDragVel -= Dir*Accel*0.25f;
 				}
 			}
 		}
@@ -366,101 +342,37 @@ void CCharacterCore::Tick(bool UseInput)
 	// clamp the velocity to something sane
 	if(length(m_Vel) > 6000)
 		m_Vel = normalize(m_Vel) * 6000;
+}
 
-	int Mask = 0;
-	if(m_pWorld->m_StopTiles) Mask |= CCollision::RACECHECK_TILES_STOP;
-	if(m_pWorld->m_Speedup) Mask |= CCollision::RACECHECK_SPEEDUP;
-	if(m_pWorld->m_Teleport) Mask |= CCollision::RACECHECK_TELE;
-	int TilePos = m_pCollision->CheckRaceTile(m_PrevPos, m_Pos, Mask);
+void CCharacterCore::AddDragVelocity()
+{
+	// Apply hook interaction velocity
+	float DragSpeed = m_pWorld->m_Tuning.m_HookDragSpeed;
 
-	if(m_pWorld->m_StopTiles)
-	{
-		if(m_pCollision->GetIndex(TilePos) == TILE_STOPL)
-		{
-			if(m_Vel.x > 0)
-			{
-				if((int)m_pCollision->GetPos(TilePos).x < (int)m_Pos.x)
-					m_Pos.x = m_PrevPos.x;
-				m_Vel.x = 0;
-			}
-		}
-		else if(m_pCollision->GetIndex(TilePos) == TILE_STOPR)
-		{
-			if(m_Vel.x < 0)
-			{
-				if((int)m_pCollision->GetPos(TilePos).x > (int)m_Pos.x)
-					m_Pos.x = m_PrevPos.x;
-				m_Vel.x = 0;
-			}
-		}
-		else if(m_pCollision->GetIndex(TilePos) == TILE_STOPB)
-		{
-			if(m_Vel.y < 0)
-			{
-				if((int)m_pCollision->GetPos(TilePos).y > (int)m_Pos.y)
-					m_Pos.y = m_PrevPos.y;
-				m_Vel.y = 0;
-			}
-		}
-		else if(m_pCollision->GetIndex(TilePos) == TILE_STOPT)
-		{
-			if(m_Vel.y > 0)
-			{
-				if((int)m_pCollision->GetPos(TilePos).y < (int)m_Pos.y)
-					m_Pos.y = m_PrevPos.y;
-				if(Jumped&3 && m_Jumped != Jumped) // check double jump
-					m_Jumped = Jumped;
-				m_Vel.y = 0;
-			}
-		}
-	}
+	m_Vel.x = SaturatedAdd(-DragSpeed, DragSpeed, m_Vel.x, m_HookDragVel.x);
+	m_Vel.y = SaturatedAdd(-DragSpeed, DragSpeed, m_Vel.y, m_HookDragVel.y);
+}
 
-	m_SpeedupTouch = false;
-	int SpeedupPos = m_pCollision->CheckSpeedup(TilePos);
-	if(m_pWorld->m_Speedup && m_LastSpeedup != SpeedupPos && SpeedupPos > -1)
-	{
-		vec2 Direction;
-		int Force;
-		m_pCollision->GetSpeedup(SpeedupPos, &Direction, &Force);
-		m_Vel += Direction*Force;
-		m_SpeedupTouch = true;
-	}
-
-	m_LastSpeedup = SpeedupPos;
-	
-	m_Teleported = false;
-	int Tele = m_pCollision->CheckTeleport(TilePos);
-	if(m_pWorld->m_Teleport && Tele)
-	{
-		// check double jump
-		if(Jumped&3 && m_Jumped != Jumped)
-			m_Jumped = Jumped;
-
-		m_HookedPlayer = -1;
-		m_HookState = HOOK_RETRACTED;
-		m_Pos = m_pCollision->GetTeleportDestination(Tele);
-		m_HookPos = m_Pos;
-		m_Teleported = true;
-
-		if(g_Config.m_SvTeleportVelReset)
-			m_Vel = vec2(0,0);
-	}
-
-	m_PrevPos = m_Pos;
+void CCharacterCore::ResetDragVelocity()
+{
+	m_HookDragVel = vec2(0,0);
 }
 
 void CCharacterCore::Move()
 {
+	if(!m_pWorld)
+		return;
+
 	float RampValue = VelocityRamp(length(m_Vel)*50, m_pWorld->m_Tuning.m_VelrampStart, m_pWorld->m_Tuning.m_VelrampRange, m_pWorld->m_Tuning.m_VelrampCurvature);
 
 	m_Vel.x = m_Vel.x*RampValue;
 
 	vec2 NewPos = m_Pos;
-	m_pCollision->MoveBox(&NewPos, &m_Vel, vec2(28.0f, 28.0f), 0);
+	m_pCollision->MoveBox(&NewPos, &m_Vel, vec2(PHYS_SIZE, PHYS_SIZE), 0, &m_Death);
 
 	m_Vel.x = m_Vel.x*(1.0f/RampValue);
 
-	if(m_pWorld && m_pWorld->m_Tuning.m_PlayerCollision)
+	if(m_pWorld->m_Tuning.m_PlayerCollision)
 	{
 		// check player collision
 		float Distance = distance(m_Pos, NewPos);
@@ -476,7 +388,7 @@ void CCharacterCore::Move()
 				if(!pCharCore || pCharCore == this)
 					continue;
 				float D = distance(Pos, pCharCore->m_Pos);
-				if(D < 28.0f && D > 0.0f)
+				if(D < PHYS_SIZE && D >= 0.0f)
 				{
 					if(a > 0.0f)
 						m_Pos = LastPos;
@@ -527,16 +439,11 @@ void CCharacterCore::Read(const CNetObj_CharacterCore *pObjCore)
 	m_Jumped = pObjCore->m_Jumped;
 	m_Direction = pObjCore->m_Direction;
 	m_Angle = pObjCore->m_Angle;
-
-	m_PrevPos = m_Pos;
 }
 
 void CCharacterCore::Quantize()
 {
-	vec2 Prev = m_PrevPos;
 	CNetObj_CharacterCore Core;
 	Write(&Core);
 	Read(&Core);
-	m_PrevPos = Prev;
 }
-

@@ -37,18 +37,18 @@ public:
 class IKernel
 {
 	// hide the implementation
-	virtual bool RegisterInterfaceImpl(const char *InterfaceName, IInterface *pInterface, bool Destroy) = 0;
+	virtual bool RegisterInterfaceImpl(const char *InterfaceName, IInterface *pInterface) = 0;
 	virtual bool ReregisterInterfaceImpl(const char *InterfaceName, IInterface *pInterface) = 0;
 	virtual IInterface *RequestInterfaceImpl(const char *InterfaceName) = 0;
 public:
 	static IKernel *Create();
 	virtual ~IKernel() {}
 
-	// templated access to handle pointer convertions and interface names
+	// templated access to handle pointer conversions and interface names
 	template<class TINTERFACE>
-	bool RegisterInterface(TINTERFACE *pInterface, bool Destroy = true)
+	bool RegisterInterface(TINTERFACE *pInterface)
 	{
-		return RegisterInterfaceImpl(TINTERFACE::InterfaceName(), pInterface, Destroy);
+		return RegisterInterfaceImpl(TINTERFACE::InterfaceName(), pInterface);
 	}
 	template<class TINTERFACE>
 	bool ReregisterInterface(TINTERFACE *pInterface)

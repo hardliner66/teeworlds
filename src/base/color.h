@@ -39,13 +39,6 @@ inline vec3 HslToRgb(vec3 HSL)
 	}
 }
 
-inline int HslToRgb(int v)
-{
-	vec3 HSL = vec3(((v>>16)&0xff)/255.0f, ((v>>8)&0xff)/255.0f, 0.5f+(v&0xff)/255.0f*0.5f);
-	vec3 RGB = HslToRgb(HSL) * 255;
-	return (((int)RGB.r)<<16)|(((int)RGB.g)<<8)|(int)RGB.b;
-}
-
 /*
 	Function: HexToRgba
 		Converts Hex to Rgba
@@ -150,10 +143,38 @@ inline vec3 RgbToHsv(vec3 rgb)
 	if(h_max != 0.0f)
 		s = (h_max - h_min)/h_max;
 
-	// lightness
-	float l = h_max;
+	// value
+	float v = h_max;
 
-	return vec3(hue, s, l);
+	return vec3(hue, s, v);
+}
+
+inline vec3 RgbToLab(vec3 rgb)
+{
+	vec3 adapt(0.950467f, 1, 1.088969f);
+	vec3 xyz(
+		0.412424f * rgb.r + 0.357579f * rgb.g + 0.180464f * rgb.b,
+		0.212656f * rgb.r + 0.715158f * rgb.g + 0.0721856f * rgb.b,
+		0.0193324f * rgb.r + 0.119193f * rgb.g + 0.950444f * rgb.b
+	);
+
+#define RGB_TO_LAB_H(VAL) ((VAL > 0.008856f) ? powf(VAL, 0.333333f) : (7.787f*VAL + 0.137931f))
+
+	return vec3(
+		116 * RGB_TO_LAB_H( xyz.y / adapt.y) - 16,
+		500 * (RGB_TO_LAB_H(xyz.x / adapt.x) - RGB_TO_LAB_H(xyz.y / adapt.y)),
+		200 * (RGB_TO_LAB_H(xyz.y / adapt.y) - RGB_TO_LAB_H(xyz.z / adapt.z))
+	);
+
+#undef RGB_TO_LAB_H
+}
+
+inline float LabDistance(vec3 labA, vec3 labB)
+{
+	float ld = labA.x - labB.x;
+	float ad = labA.y - labB.y;
+	float bd = labA.z - labB.z;
+	return sqrtf(ld*ld + ad*ad + bd*bd);
 }
 
 #endif
