@@ -9,8 +9,8 @@ class CGameControllerTDM : public IGameController
 public:
 	CGameControllerTDM(class CGameContext *pGameServer);
 
-	// event
-	virtual int OnCharacterDeath(class CCharacter *pVictim, class CPlayer *pKiller, int Weapon);
+	int OnCharacterDeath(class CCharacter *pVictim, class CPlayer *pKiller, int Weapon);
+	virtual void Snap(int SnappingClient);
+	virtual void Tick();
 };
-
 #endif

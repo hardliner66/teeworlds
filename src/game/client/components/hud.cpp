@@ -2,231 +2,157 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include <engine/graphics.h>
 #include <engine/textrender.h>
+#include <engine/demo.h>
 #include <engine/shared/config.h>
+#include <engine/serverbrowser.h>
 
-#include <generated/protocol.h>
-#include <generated/client_data.h>
+#include <game/generated/protocol.h>
+#include <game/generated/client_data.h>
 #include <game/layers.h>
+#include <game/teerace.h>
 #include <game/client/gameclient.h>
 #include <game/client/animstate.h>
 #include <game/client/render.h>
 
-#include "menus.h"
 #include "controls.h"
 #include "camera.h"
 #include "hud.h"
 #include "voting.h"
 #include "binds.h"
-#include "motd.h"
-#include "scoreboard.h"
-#include "stats.h"
+#include "menus.h"
+#include "race_demo.h"
 
 CHud::CHud()
 {
 	// won't work if zero
 	m_AverageFPS = 1.0f;
-
-	m_WarmupHideTick = 0;
-	m_CheckpointTime = 0;
+	
+	OnReset();
 }
 
 void CHud::OnReset()
 {
-	m_WarmupHideTick = 0;
-	m_CheckpointTime = 0;
-}
-
-bool CHud::IsLargeWarmupTimerShown()
-{
-	return !m_pClient->m_pMotd->IsActive()
-		&& !m_pClient->m_pScoreboard->IsActive()
-		&& !m_pClient->m_pStats->IsActive()
-		&& (m_WarmupHideTick == 0 || (time_get() - m_WarmupHideTick) / time_freq() < 10); // inactivity based
+	m_CheckpointTick = -1;
+	m_CheckpointDiff = 0;
+	m_RaceTime = 0;
+	m_ServerRecord = 0;
 }
 
 void CHud::RenderGameTimer()
 {
-	float x = 300.0f*Graphics()->ScreenAspect()/2.0f;
-	float FontSize = 10.0f;
+	float Half = 300.0f*Graphics()->ScreenAspect()/2.0f;
 
-	int Time = 0;
-	if(m_pClient->m_Snap.m_pGameData->m_GameStateFlags&GAMESTATEFLAG_SUDDENDEATH)
-		Time = 0;
-	else if(m_pClient->m_GameInfo.m_TimeLimit && !(m_pClient->m_Snap.m_pGameData->m_GameStateFlags&GAMESTATEFLAG_WARMUP))
+	if(!(m_pClient->m_Snap.m_pGameInfoObj->m_GameStateFlags&GAMESTATEFLAG_SUDDENDEATH))
 	{
-		Time = m_pClient->m_GameInfo.m_TimeLimit*60 - ((Client()->GameTick()-m_pClient->m_Snap.m_pGameData->m_GameStartTick)/Client()->GameTickSpeed());
-
-		if(m_pClient->m_Snap.m_pGameData->m_GameStateFlags&(GAMESTATEFLAG_ROUNDOVER|GAMESTATEFLAG_GAMEOVER))
-			Time = 0;
-	}
-	else if(m_pClient->m_Snap.m_pGameData->m_GameStateFlags&(GAMESTATEFLAG_ROUNDOVER|GAMESTATEFLAG_GAMEOVER))
-		Time = m_pClient->m_Snap.m_pGameData->m_GameStateEndTick/Client()->GameTickSpeed();
-	else
-		Time = (Client()->GameTick()-m_pClient->m_Snap.m_pGameData->m_GameStartTick)/Client()->GameTickSpeed();
-
-	char aBuf[32];
-	str_format(aBuf, sizeof(aBuf), "%d:%02d", Time/60, Time%60);
-	float w = TextRender()->TextWidth(0, FontSize, aBuf, -1, -1.0f);
-	// last 60 sec red, last 10 sec blink
-	if(m_pClient->m_GameInfo.m_TimeLimit && Time <= 60 && !(m_pClient->m_Snap.m_pGameData->m_GameStateFlags&GAMESTATEFLAG_WARMUP))
-	{
-		float Alpha = Time <= 10 && (2*time_get()/time_freq()) % 2 ? 0.5f : 1.0f;
-		TextRender()->TextColor(1.0f, 0.25f, 0.25f, Alpha);
-	}
-	TextRender()->Text(0, x-w/2, 2, FontSize, aBuf, -1.0f);
-	TextRender()->TextColor(1.0f, 1.0f, 1.0f, 1.0f);
-
-	if(m_pClient->m_Snap.m_pGameData->m_GameStateFlags&GAMESTATEFLAG_SUDDENDEATH)
-	{
-		const char *pText = Localize("Sudden Death");
-		FontSize = 12.0f;
-		float w = TextRender()->TextWidth(0, FontSize, pText, -1, -1.0f);
-		TextRender()->Text(0, x-w/2, 2+FontSize, FontSize, pText, -1.0f);
-	}
-}
-
-void CHud::RenderPauseTimer()
-{
-	if((m_pClient->m_Snap.m_pGameData->m_GameStateFlags&(GAMESTATEFLAG_STARTCOUNTDOWN|GAMESTATEFLAG_PAUSED)) == GAMESTATEFLAG_PAUSED)
-	{
-		char aBuf[256];
-		const char *pText = Localize("Game paused");
-		float FontSize = 20.0f;
-		float w = TextRender()->TextWidth(0, FontSize, pText, -1, -1.0f);
-		TextRender()->Text(0, 150*Graphics()->ScreenAspect() - w/2, 50, FontSize, pText, -1.0f);
-
-		FontSize = 16.0f;
-		if(m_pClient->m_Snap.m_pGameData->m_GameStateEndTick == 0)
+		char Buf[32];
+		int Time = 0;
+		if(m_pClient->m_Snap.m_pGameInfoObj->m_TimeLimit && m_pClient->m_Snap.m_pGameInfoObj->m_WarmupTimer <= 0)
 		{
-			if(m_pClient->m_Snap.m_NotReadyCount == 1)
-				str_format(aBuf, sizeof(aBuf), Localize("%d player not ready"), m_pClient->m_Snap.m_NotReadyCount);
-			else if(m_pClient->m_Snap.m_NotReadyCount > 1)
-				str_format(aBuf, sizeof(aBuf), Localize("%d players not ready"), m_pClient->m_Snap.m_NotReadyCount);
-			else
-				return;
-			RenderReadyUpNotification();
+			Time = m_pClient->m_Snap.m_pGameInfoObj->m_TimeLimit*60 - ((Client()->GameTick()-m_pClient->m_Snap.m_pGameInfoObj->m_RoundStartTick)/Client()->GameTickSpeed());
+
+			if(m_pClient->m_Snap.m_pGameInfoObj->m_GameStateFlags&GAMESTATEFLAG_GAMEOVER)
+				Time = 0;
 		}
 		else
+			Time = (Client()->GameTick()-m_pClient->m_Snap.m_pGameInfoObj->m_RoundStartTick)/Client()->GameTickSpeed();
+
+		int RaceTime = (Client()->GameTick()+m_pClient->m_Snap.m_pGameInfoObj->m_WarmupTimer)*10/Client()->GameTickSpeed();
+		if(g_Config.m_ClRaceReplaceGametime && m_pClient->m_Snap.m_pGameInfoObj->m_GameStateFlags&GAMESTATEFLAG_RACETIME)
+			str_format(Buf, sizeof(Buf), "%02d:%02d.%d", RaceTime/(60*10), (RaceTime/10)%60, RaceTime%10);
+		else if(g_Config.m_ClRaceReplaceGametime && m_RaceTime)
+			str_format(Buf, sizeof(Buf), "%02d:%02d", m_RaceTime/60, m_RaceTime%60);
+		else
+			str_format(Buf, sizeof(Buf), "%d:%02d", Time/60, Time%60);
+		float FontSize = 10.0f;
+		float w = TextRender()->TextWidth(0, FontSize, Buf, -1);
+		// last 60 sec red, last 10 sec blink
+		if(m_pClient->m_Snap.m_pGameInfoObj->m_TimeLimit && Time <= 60 && m_pClient->m_Snap.m_pGameInfoObj->m_WarmupTimer <= 0)
 		{
-			float Seconds = static_cast<float>(m_pClient->m_Snap.m_pGameData->m_GameStateEndTick-Client()->GameTick())/SERVER_TICK_SPEED;
-			if(Seconds < 5)
-				str_format(aBuf, sizeof(aBuf), "%.1f", Seconds);
-			else
-				str_format(aBuf, sizeof(aBuf), "%d", round_to_int(Seconds));
+			float Alpha = Time <= 10 && (2*time_get()/time_freq()) % 2 ? 0.5f : 1.0f;
+			TextRender()->TextColor(1.0f, 0.25f, 0.25f, Alpha);
 		}
-		w = TextRender()->TextWidth(0, FontSize, aBuf, -1, -1.0f);
-		TextRender()->Text(0, 150*Graphics()->ScreenAspect() - w/2, 75, FontSize, aBuf, -1.0f);
+		TextRender()->Text(0, Half-w/2, 2, FontSize, Buf, -1);
+		TextRender()->TextColor(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 }
 
-void CHud::RenderStartCountdown()
+void CHud::RenderPauseNotification()
 {
-	if(m_pClient->m_Snap.m_pGameData->m_GameStateFlags&GAMESTATEFLAG_STARTCOUNTDOWN)
+	if(m_pClient->m_Snap.m_pGameInfoObj->m_GameStateFlags&GAMESTATEFLAG_PAUSED &&
+		!(m_pClient->m_Snap.m_pGameInfoObj->m_GameStateFlags&GAMESTATEFLAG_GAMEOVER))
 	{
-		const char *pText = Localize("Game starts in");
+		const char *pText = Localize("Game paused");
 		float FontSize = 20.0f;
-		float w = TextRender()->TextWidth(0, FontSize, pText, -1, -1.0f);
-		TextRender()->Text(0, 150*Graphics()->ScreenAspect() - w/2, 50, FontSize, pText, -1.0f);
+		float w = TextRender()->TextWidth(0, FontSize,pText, -1);
+		TextRender()->Text(0, 150.0f*Graphics()->ScreenAspect()+-w/2.0f, 50.0f, FontSize, pText, -1);
 
-		if(m_pClient->m_Snap.m_pGameData->m_GameStateEndTick == 0)
-			return;
-
-		FontSize = 16.0f;
-		char aBuf[32];
-		int Seconds = (m_pClient->m_Snap.m_pGameData->m_GameStateEndTick-Client()->GameTick()+SERVER_TICK_SPEED-1)/SERVER_TICK_SPEED;
-		str_format(aBuf, sizeof(aBuf), "%d", Seconds);
-		w = TextRender()->TextWidth(0, FontSize, aBuf, -1, -1.0f);
-		TextRender()->Text(0, 150*Graphics()->ScreenAspect() - w/2, 75, FontSize, aBuf, -1.0f);
+		if(m_pClient->m_Snap.m_pGameInfoObj->m_WarmupTimer)
+		{
+			char Buf[256];
+			int Seconds = m_pClient->m_Snap.m_pGameInfoObj->m_WarmupTimer/SERVER_TICK_SPEED;
+			if(Seconds < 5)
+				str_format(Buf, sizeof(Buf), "%d.%d", Seconds, (m_pClient->m_Snap.m_pGameInfoObj->m_WarmupTimer*10/SERVER_TICK_SPEED)%10);
+			else
+				str_format(Buf, sizeof(Buf), "%d", Seconds);
+			w = TextRender()->TextWidth(0, FontSize, Buf, -1);
+			TextRender()->Text(0, 150*Graphics()->ScreenAspect()+-w/2, 75, FontSize, Buf, -1);
+		}
 	}
 }
 
-void CHud::RenderNetworkIssueNotification()
+void CHud::RenderSuddenDeath()
 {
-	float x = 300.0f*Graphics()->ScreenAspect()/2.0f - 15.0f;
-	float FontSize = 10.0f;
-
-	// render network indicator when 2/5 and under
-	const int NetScore = Client()->GetInputtimeMarginStabilityScore();
-	if(NetScore > 250)
+	if(m_pClient->m_Snap.m_pGameInfoObj->m_GameStateFlags&GAMESTATEFLAG_SUDDENDEATH)
 	{
-		float Margin = 2.0f;
-		x = x-5.0f-FontSize-Margin*2;
-		Graphics()->BlendNormal();
-		CUIRect RectBox = {x, 4-Margin, FontSize+2*Margin, FontSize+2*Margin};
-		vec4 Color = vec4(0.0f, 0.0f, 0.0f, 0.3f);
-		RenderTools()->DrawUIRect(&RectBox, Color, CUI::CORNER_ALL, 1.0f);
-		Graphics()->TextureSet(g_pData->m_aImages[IMAGE_NETWORKICONS].m_Id);
-		Graphics()->QuadsBegin();
-		RenderTools()->SelectSprite(SPRITE_NETWORK_BAD);
-		IGraphics::CQuadItem QuadItem(x+Margin, 4, FontSize, FontSize);
-		Graphics()->QuadsDrawTL(&QuadItem, 1);
-		Graphics()->QuadsEnd();
-	}
-}
-
-void CHud::RenderDeadNotification()
-{
-	if(m_pClient->m_Snap.m_pGameData->m_GameStateFlags == 0 && m_pClient->m_aClients[m_pClient->m_LocalClientID].m_Team != TEAM_SPECTATORS &&
-		m_pClient->m_Snap.m_pLocalInfo && (m_pClient->m_Snap.m_pLocalInfo->m_PlayerFlags&PLAYERFLAG_DEAD))
-	{
-		const char *pText = Localize("Wait for next round");
-		float FontSize = 16.0f;
-		float w = TextRender()->TextWidth(0, FontSize, pText, -1, -1.0f);
-		TextRender()->Text(0, 150*Graphics()->ScreenAspect() - w/2, 50, FontSize, pText, -1.0f);
+		float Half = 300.0f*Graphics()->ScreenAspect()/2.0f;
+		const char *pText = Localize("Sudden Death");
+		float FontSize = 12.0f;
+		float w = TextRender()->TextWidth(0, FontSize, pText, -1);
+		TextRender()->Text(0, Half-w/2, 2, FontSize, pText, -1);
 	}
 }
 
 void CHud::RenderScoreHud()
 {
 	// render small score hud
-	if(!(m_pClient->m_Snap.m_pGameData->m_GameStateFlags&(GAMESTATEFLAG_ROUNDOVER|GAMESTATEFLAG_GAMEOVER)))
+
+	if(!(m_pClient->m_Snap.m_pGameInfoObj->m_GameStateFlags&GAMESTATEFLAG_GAMEOVER))
 	{
-		int GameFlags = m_pClient->m_GameInfo.m_GameFlags;
+		int GameFlags = m_pClient->m_Snap.m_pGameInfoObj->m_GameFlags;
 		float Whole = 300*Graphics()->ScreenAspect();
 		float StartY = 229.0f;
-		const float TeamOffset = 20.0f;
 
-		if(GameFlags&GAMEFLAG_TEAMS && m_pClient->m_Snap.m_pGameDataTeam && !(GameFlags&GAMEFLAG_RACE))
+		if(GameFlags&GAMEFLAG_TEAMS && m_pClient->m_Snap.m_pGameDataObj)
 		{
 			char aScoreTeam[2][32];
-			str_format(aScoreTeam[TEAM_RED], sizeof(aScoreTeam)/2, "%d", m_pClient->m_Snap.m_pGameDataTeam->m_TeamscoreRed);
-			str_format(aScoreTeam[TEAM_BLUE], sizeof(aScoreTeam)/2, "%d", m_pClient->m_Snap.m_pGameDataTeam->m_TeamscoreBlue);
-			float aScoreTeamWidth[2] = { TextRender()->TextWidth(0, 14.0f, aScoreTeam[TEAM_RED], -1, -1.0f), TextRender()->TextWidth(0, 14.0f, aScoreTeam[TEAM_BLUE], -1, -1.0f) };
-			float ScoreWidthMax = max(max(aScoreTeamWidth[TEAM_RED], aScoreTeamWidth[TEAM_BLUE]), TextRender()->TextWidth(0, 14.0f, "100", -1, -1.0f));
+			str_format(aScoreTeam[TEAM_RED], sizeof(aScoreTeam)/2, "%d", m_pClient->m_Snap.m_pGameDataObj->m_TeamscoreRed);
+			str_format(aScoreTeam[TEAM_BLUE], sizeof(aScoreTeam)/2, "%d", m_pClient->m_Snap.m_pGameDataObj->m_TeamscoreBlue);
+			float aScoreTeamWidth[2] = { TextRender()->TextWidth(0, 14.0f, aScoreTeam[TEAM_RED], -1), TextRender()->TextWidth(0, 14.0f, aScoreTeam[TEAM_BLUE], -1) };
+			int FlagCarrier[2] = { m_pClient->m_Snap.m_pGameDataObj->m_FlagCarrierRed, m_pClient->m_Snap.m_pGameDataObj->m_FlagCarrierBlue };
+			float ScoreWidthMax = max(max(aScoreTeamWidth[TEAM_RED], aScoreTeamWidth[TEAM_BLUE]), TextRender()->TextWidth(0, 14.0f, "100", -1));
 			float Split = 3.0f;
 			float ImageSize = GameFlags&GAMEFLAG_FLAGS ? 16.0f : Split;
 
-			for(int t = 0; t < NUM_TEAMS; t++)
+			for(int t = 0; t < 2; t++)
 			{
 				// draw box
-				CUIRect Rect = {Whole-ScoreWidthMax-ImageSize-2*Split, StartY+t*TeamOffset, ScoreWidthMax+ImageSize+2*Split, 18.0f};
 				Graphics()->BlendNormal();
-				RenderTools()->DrawUIRect(&Rect, t == 0 ? vec4(1.0f, 0.0f, 0.0f, 0.25f) : vec4(0.0f, 0.0f, 1.0f, 0.25f), CUI::CORNER_L, 5.0f);
+				Graphics()->TextureSet(-1);
+				Graphics()->QuadsBegin();
+				if(t == 0)
+					Graphics()->SetColor(1.0f, 0.0f, 0.0f, 0.25f);
+				else
+					Graphics()->SetColor(0.0f, 0.0f, 1.0f, 0.25f);
+				RenderTools()->DrawRoundRectExt(Whole-ScoreWidthMax-ImageSize-2*Split, StartY+t*20, ScoreWidthMax+ImageSize+2*Split, 18.0f, 5.0f, CUI::CORNER_L);
+				Graphics()->QuadsEnd();
 
 				// draw score
-				TextRender()->Text(0, Whole-ScoreWidthMax+(ScoreWidthMax-aScoreTeamWidth[t])/2-Split, StartY+t*TeamOffset, 14.0f, aScoreTeam[t], -1.0f);
+				TextRender()->Text(0, Whole-ScoreWidthMax+(ScoreWidthMax-aScoreTeamWidth[t])/2-Split, StartY+t*20, 14.0f, aScoreTeam[t], -1);
 
-				if(GameFlags&GAMEFLAG_SURVIVAL)
+				if(GameFlags&GAMEFLAG_FLAGS)
 				{
-					// draw number of alive players
-					char aBuf[32];
-					str_format(aBuf, sizeof(aBuf), m_pClient->m_Snap.m_AliveCount[t]==1 ? Localize("%d player left") : Localize("%d players left"),
-								m_pClient->m_Snap.m_AliveCount[t]);
-					float w = TextRender()->TextWidth(0, 8.0f, aBuf, -1, -1.0f);
-					TextRender()->Text(0, min(Whole-w-1.0f, Whole-ScoreWidthMax-ImageSize-2*Split), StartY+(t+1)*TeamOffset-3.0f, 8.0f, aBuf, -1.0f);
-				}
-				StartY += 8.0f;
-			}
-
-			if(GameFlags&GAMEFLAG_FLAGS && m_pClient->m_Snap.m_pGameDataFlag)
-			{
-				int FlagCarrier[2] = { m_pClient->m_Snap.m_pGameDataFlag->m_FlagCarrierRed, m_pClient->m_Snap.m_pGameDataFlag->m_FlagCarrierBlue };
-				int FlagDropTick[2] = { m_pClient->m_Snap.m_pGameDataFlag->m_FlagDropTickRed, m_pClient->m_Snap.m_pGameDataFlag->m_FlagDropTickBlue };
-				StartY = 229.0f;
-
-				for(int t = 0; t < 2; t++)
-				{
-					int BlinkTimer = (FlagDropTick[t] != 0 && (Client()->GameTick()-FlagDropTick[t])/Client()->GameTickSpeed() >= 25) ? 10 : 20;
+					int BlinkTimer = (m_pClient->m_FlagDropTick[t] != 0 &&
+										(Client()->GameTick()-m_pClient->m_FlagDropTick[t])/Client()->GameTickSpeed() >= 25) ? 10 : 20;
 					if(FlagCarrier[t] == FLAG_ATSTAND || (FlagCarrier[t] == FLAG_TAKEN && ((Client()->GameTick()/BlinkTimer)&1)))
 					{
 						// draw flag
@@ -234,7 +160,7 @@ void CHud::RenderScoreHud()
 						Graphics()->TextureSet(g_pData->m_aImages[IMAGE_GAME].m_Id);
 						Graphics()->QuadsBegin();
 						RenderTools()->SelectSprite(t==0?SPRITE_FLAG_RED:SPRITE_FLAG_BLUE);
-						IGraphics::CQuadItem QuadItem(Whole-ScoreWidthMax-ImageSize, StartY+1.0f+t*TeamOffset, ImageSize/2, ImageSize);
+						IGraphics::CQuadItem QuadItem(Whole-ScoreWidthMax-ImageSize, StartY+1.0f+t*20, ImageSize/2, ImageSize);
 						Graphics()->QuadsDrawTL(&QuadItem, 1);
 						Graphics()->QuadsEnd();
 					}
@@ -242,54 +168,46 @@ void CHud::RenderScoreHud()
 					{
 						// draw name of the flag holder
 						int ID = FlagCarrier[t]%MAX_CLIENTS;
-						char aName[64];
-						str_format(aName, sizeof(aName), "%s", Config()->m_ClShowsocial ? m_pClient->m_aClients[ID].m_aName : "");
-						float w = TextRender()->TextWidth(0, 8.0f, aName, -1, -1.0f) + RenderTools()->GetClientIdRectSize(8.0f);
-
-						CTextCursor Cursor;
-						float x = min(Whole-w-1.0f, Whole-ScoreWidthMax-ImageSize-2*Split);
-						float y = StartY+(t+1)*TeamOffset-3.0f;
-						TextRender()->SetCursor(&Cursor, x, y, 8.0f, TEXTFLAG_RENDER);
-
-						RenderTools()->DrawClientID(TextRender(), &Cursor, ID);
-						TextRender()->TextEx(&Cursor, aName, -1);
+						const char *pName = m_pClient->m_aClients[ID].m_aName;
+						float w = TextRender()->TextWidth(0, 8.0f, pName, -1);
+						TextRender()->Text(0, min(Whole-w-1.0f, Whole-ScoreWidthMax-ImageSize-2*Split), StartY+(t+1)*20.0f-3.0f, 8.0f, pName, -1);
 
 						// draw tee of the flag holder
 						CTeeRenderInfo Info = m_pClient->m_aClients[ID].m_RenderInfo;
 						Info.m_Size = 18.0f;
 						RenderTools()->RenderTee(CAnimState::GetIdle(), &Info, EMOTE_NORMAL, vec2(1,0),
-							vec2(Whole-ScoreWidthMax-Info.m_Size/2-Split, StartY+1.0f+Info.m_Size/2+t*TeamOffset));
+							vec2(Whole-ScoreWidthMax-Info.m_Size/2-Split, StartY+1.0f+Info.m_Size/2+t*20));
 					}
-					StartY += 8.0f;
 				}
+				StartY += 8.0f;
 			}
 		}
 		else
 		{
 			int Local = -1;
 			int aPos[2] = { 1, 2 };
-			CGameClient::CPlayerInfoItem aPlayerInfo[2] = {{0}};
+			const CNetObj_PlayerInfo *apPlayerInfo[2] = { 0, 0 };
 			int i = 0;
-			for(int t = 0; t < 2 && i < MAX_CLIENTS && m_pClient->m_Snap.m_aInfoByScore[i].m_pPlayerInfo; ++i)
+			for(int t = 0; t < 2 && i < MAX_CLIENTS && m_pClient->m_Snap.m_paInfoByScore[i]; ++i)
 			{
-				if(m_pClient->m_aClients[m_pClient->m_Snap.m_aInfoByScore[i].m_ClientID].m_Team != TEAM_SPECTATORS)
+				if(m_pClient->m_Snap.m_paInfoByScore[i]->m_Team != TEAM_SPECTATORS)
 				{
-					aPlayerInfo[t] = m_pClient->m_Snap.m_aInfoByScore[i];
-					if(aPlayerInfo[t].m_ClientID == m_pClient->m_LocalClientID)
+					apPlayerInfo[t] = m_pClient->m_Snap.m_paInfoByScore[i];
+					if(apPlayerInfo[t]->m_ClientID == m_pClient->m_Snap.m_LocalClientID)
 						Local = t;
 					++t;
 				}
 			}
 			// search local player info if not a spectator, nor within top2 scores
-			if(Local == -1 && m_pClient->m_aClients[m_pClient->m_LocalClientID].m_Team != TEAM_SPECTATORS)
+			if(Local == -1 && m_pClient->m_Snap.m_pLocalInfo && m_pClient->m_Snap.m_pLocalInfo->m_Team != TEAM_SPECTATORS)
 			{
-				for(; i < MAX_CLIENTS && m_pClient->m_Snap.m_aInfoByScore[i].m_pPlayerInfo; ++i)
+				for(; i < MAX_CLIENTS && m_pClient->m_Snap.m_paInfoByScore[i]; ++i)
 				{
-					if(m_pClient->m_aClients[m_pClient->m_Snap.m_aInfoByScore[i].m_ClientID].m_Team != TEAM_SPECTATORS)
+					if(m_pClient->m_Snap.m_paInfoByScore[i]->m_Team != TEAM_SPECTATORS)
 						++aPos[1];
-					if(m_pClient->m_Snap.m_aInfoByScore[i].m_ClientID == m_pClient->m_LocalClientID)
+					if(m_pClient->m_Snap.m_paInfoByScore[i]->m_ClientID == m_pClient->m_Snap.m_LocalClientID)
 					{
-						aPlayerInfo[1] = m_pClient->m_Snap.m_aInfoByScore[i];
+						apPlayerInfo[1] = m_pClient->m_Snap.m_paInfoByScore[i];
 						Local = 1;
 						break;
 					}
@@ -298,72 +216,50 @@ void CHud::RenderScoreHud()
 			char aScore[2][32];
 			for(int t = 0; t < 2; ++t)
 			{
-				if(aPlayerInfo[t].m_pPlayerInfo)
-				{
-					if(GameFlags&GAMEFLAG_RACE)
-						FormatTime(aScore[t], sizeof(aScore[0]), aPlayerInfo[t].m_pPlayerInfo->m_Score, m_pClient->RacePrecision());
-					else
-						str_format(aScore[t], sizeof(aScore[0]), "%d", aPlayerInfo[t].m_pPlayerInfo->m_Score);
-				}
+				if(apPlayerInfo[t])
+					str_format(aScore[t], sizeof(aScore)/2, "%d", apPlayerInfo[t]->m_Score);
 				else
-				{
 					aScore[t][0] = 0;
-				}
 			}
-
-			float FontSize = (GameFlags&GAMEFLAG_RACE) ? 10.f : 14.f;
-			float aScoreWidth[2] = {TextRender()->TextWidth(0, FontSize, aScore[0], -1, -1.0f), TextRender()->TextWidth(0, FontSize, aScore[1], -1, -1.0f)};
-			float ScoreWidthMax = max(max(aScoreWidth[0], aScoreWidth[1]), TextRender()->TextWidth(0, FontSize, "10", -1, -1.0f));
+			float aScoreWidth[2] = {TextRender()->TextWidth(0, 14.0f, aScore[0], -1), TextRender()->TextWidth(0, 14.0f, aScore[1], -1)};
+			float ScoreWidthMax = max(max(aScoreWidth[0], aScoreWidth[1]), TextRender()->TextWidth(0, 14.0f, "10", -1));
 			float Split = 3.0f, ImageSize = 16.0f, PosSize = 16.0f;
-
-			if(GameFlags&GAMEFLAG_SURVIVAL)
-			{
-				// draw number of alive players
-				char aBuf[32];
-				str_format(aBuf, sizeof(aBuf), m_pClient->m_Snap.m_AliveCount[0] == 1 ? Localize("%d player left") : Localize("%d players left"),
-					m_pClient->m_Snap.m_AliveCount[0]);
-				float w = TextRender()->TextWidth(0, 8.0f, aBuf, -1, -1.0f);
-				TextRender()->Text(0, min(Whole - w - 1.0f, Whole - ScoreWidthMax - ImageSize - 2 * Split), StartY - 12.0f, 8.0f, aBuf, -1.0f);
-			}
 
 			for(int t = 0; t < 2; t++)
 			{
 				// draw box
-				CUIRect Rect = {Whole-ScoreWidthMax-ImageSize-2*Split-PosSize, StartY+t*TeamOffset, ScoreWidthMax+ImageSize+2*Split+PosSize, 18.0f};
 				Graphics()->BlendNormal();
-				RenderTools()->DrawUIRect(&Rect, t == Local ? vec4(1.0f, 1.0f, 1.0f, 0.25f) : vec4(0.0f, 0.0f, 0.0f, 0.25f), CUI::CORNER_L, 5.0f);
+				Graphics()->TextureSet(-1);
+				Graphics()->QuadsBegin();
+				if(t == Local)
+					Graphics()->SetColor(1.0f, 1.0f, 1.0f, 0.25f);
+				else
+					Graphics()->SetColor(0.0f, 0.0f, 0.0f, 0.25f);
+				RenderTools()->DrawRoundRectExt(Whole-ScoreWidthMax-ImageSize-2*Split-PosSize, StartY+t*20, ScoreWidthMax+ImageSize+2*Split+PosSize, 18.0f, 5.0f, CUI::CORNER_L);
+				Graphics()->QuadsEnd();
 
 				// draw score
-				float Spacing = (GameFlags&GAMEFLAG_RACE) ? 2.f : 0.f;
-				TextRender()->Text(0, Whole-ScoreWidthMax+(ScoreWidthMax-aScoreWidth[t])/2-Split, StartY+t*TeamOffset+Spacing, FontSize, aScore[t], -1.0f);
+				TextRender()->Text(0, Whole-ScoreWidthMax+(ScoreWidthMax-aScoreWidth[t])/2-Split, StartY+t*20, 14.0f, aScore[t], -1);
 
-				if(aPlayerInfo[t].m_pPlayerInfo)
-				{
+				if(apPlayerInfo[t])
+ 				{
 					// draw name
-					int ID = aPlayerInfo[t].m_ClientID;
-					char aName[64];
-					str_format(aName, sizeof(aName), "%s", Config()->m_ClShowsocial ? m_pClient->m_aClients[ID].m_aName : "");
-					float w = TextRender()->TextWidth(0, 8.0f, aName, -1, -1.0f) + RenderTools()->GetClientIdRectSize(8.0f);
-
-					CTextCursor Cursor;
-					float x = min(Whole-w-1.0f, Whole-ScoreWidthMax-ImageSize-2*Split-PosSize);
-					float y = StartY+(t+1)*TeamOffset-3.0f;
-					TextRender()->SetCursor(&Cursor, x, y, 8.0f, TEXTFLAG_RENDER);
-
-					RenderTools()->DrawClientID(TextRender(), &Cursor, ID);
-					TextRender()->TextEx(&Cursor, aName, -1);
+					int ID = apPlayerInfo[t]->m_ClientID;
+					const char *pName = m_pClient->m_aClients[ID].m_aName;
+					float w = TextRender()->TextWidth(0, 8.0f, pName, -1);
+					TextRender()->Text(0, min(Whole-w-1.0f, Whole-ScoreWidthMax-ImageSize-2*Split-PosSize), StartY+(t+1)*20.0f-3.0f, 8.0f, pName, -1);
 
 					// draw tee
 					CTeeRenderInfo Info = m_pClient->m_aClients[ID].m_RenderInfo;
-					Info.m_Size = 18.0f;
-					RenderTools()->RenderTee(CAnimState::GetIdle(), &Info, EMOTE_NORMAL, vec2(1,0),
-						vec2(Whole-ScoreWidthMax-Info.m_Size/2-Split, StartY+1.0f+Info.m_Size/2+t*TeamOffset));
+ 					Info.m_Size = 18.0f;
+ 					RenderTools()->RenderTee(CAnimState::GetIdle(), &Info, EMOTE_NORMAL, vec2(1,0),
+ 						vec2(Whole-ScoreWidthMax-Info.m_Size/2-Split, StartY+1.0f+Info.m_Size/2+t*20));
 				}
 
 				// draw position
 				char aBuf[32];
 				str_format(aBuf, sizeof(aBuf), "%d.", aPos[t]);
-				TextRender()->Text(0, Whole-ScoreWidthMax-ImageSize-Split-PosSize, StartY+2.0f+t*TeamOffset, 10.0f, aBuf, -1.0f);
+				TextRender()->Text(0, Whole-ScoreWidthMax-ImageSize-Split-PosSize, StartY+2.0f+t*20, 10.0f, aBuf, -1);
 
 				StartY += 8.0f;
 			}
@@ -374,78 +270,43 @@ void CHud::RenderScoreHud()
 void CHud::RenderWarmupTimer()
 {
 	// render warmup timer
-	if(m_pClient->m_Snap.m_pGameData->m_GameStateFlags&GAMESTATEFLAG_WARMUP)
+	if(m_pClient->m_Snap.m_pGameInfoObj->m_WarmupTimer > 0
+		&& !(m_pClient->m_Snap.m_pGameInfoObj->m_GameStateFlags&GAMESTATEFLAG_PAUSED)
+		&& !(m_pClient->m_Snap.m_pGameInfoObj->m_GameStateFlags&GAMESTATEFLAG_RACETIME))
 	{
-		char aBuf[256];
-		const char *pText = Localize("Warmup");
-		const bool LargeTimer = IsLargeWarmupTimerShown();
-		const float FontSizeTitle = LargeTimer ? 20.0f : 8.0f;
-		const float FontSizeMessage = LargeTimer ? 16.0f : 6.0f;
+		char Buf[256];
+		float FontSize = 20.0f;
+		float w = TextRender()->TextWidth(0, FontSize, Localize("Warmup"), -1);
+		TextRender()->Text(0, 150*Graphics()->ScreenAspect()+-w/2, 50, FontSize, Localize("Warmup"), -1);
 
-		if(LargeTimer)
-		{
-			float TextWidth = TextRender()->TextWidth(0, FontSizeTitle, pText, -1, -1.0f);
-			TextRender()->Text(0, 150*Graphics()->ScreenAspect() - TextWidth/2, 50, FontSizeTitle, pText, -1.0f);
-		}
+		int Seconds = m_pClient->m_Snap.m_pGameInfoObj->m_WarmupTimer/SERVER_TICK_SPEED;
+		if(Seconds < 5)
+			str_format(Buf, sizeof(Buf), "%d.%d", Seconds, (m_pClient->m_Snap.m_pGameInfoObj->m_WarmupTimer*10/SERVER_TICK_SPEED)%10);
 		else
-		{
-			TextRender()->TextColor(1, 1, 0.5f, 1);
-			TextRender()->Text(0, 10, 45, FontSizeTitle, pText, -1.0f);
-		}
-
-		if(m_pClient->m_Snap.m_pGameData->m_GameStateEndTick == 0)
-		{
-			if(m_pClient->m_Snap.m_NotReadyCount == 1)
-			{
-				str_format(aBuf, sizeof(aBuf), Localize("%d player not ready"), m_pClient->m_Snap.m_NotReadyCount);
-				RenderReadyUpNotification();
-			}
-			else if(m_pClient->m_Snap.m_NotReadyCount > 1)
-			{
-				str_format(aBuf, sizeof(aBuf), Localize("%d players not ready"), m_pClient->m_Snap.m_NotReadyCount);
-				RenderReadyUpNotification();
-			}
-			else
-			{
-				str_format(aBuf, sizeof(aBuf), Localize("wait for more players"));
-				if(m_WarmupHideTick == 0)
-					m_WarmupHideTick = time_get();
-			}
-		}
-		else
-		{
-			float Seconds = static_cast<float>(m_pClient->m_Snap.m_pGameData->m_GameStateEndTick-Client()->GameTick())/SERVER_TICK_SPEED;
-			if(Seconds < 5)
-				str_format(aBuf, sizeof(aBuf), "%.1f", Seconds);
-			else
-				str_format(aBuf, sizeof(aBuf), "%d", round_to_int(Seconds));
-		}
-
-		if(LargeTimer)
-		{
-			float TextWidth = TextRender()->TextWidth(0, FontSizeMessage, aBuf, -1, -1.0f);
-			TextRender()->Text(0, 150*Graphics()->ScreenAspect() - TextWidth/2, 75, FontSizeMessage, aBuf, -1.0f);
-		}
-		else
-		{
-			TextRender()->Text(0, 10, 54, FontSizeMessage, aBuf, -1.0f);
-			TextRender()->TextColor(1, 1, 1, 1);
-		}
+			str_format(Buf, sizeof(Buf), "%d", Seconds);
+		w = TextRender()->TextWidth(0, FontSize, Buf, -1);
+		TextRender()->Text(0, 150*Graphics()->ScreenAspect()+-w/2, 75, FontSize, Buf, -1);
 	}
-	else if((m_pClient->m_Snap.m_pGameData->m_GameStateEndTick == 0 && m_pClient->m_Snap.m_NotReadyCount > 0) || m_pClient->m_Snap.m_pGameData->m_GameStateEndTick != 0)
-		m_WarmupHideTick = 0;
+}
+
+void CHud::MapscreenToGroup(float CenterX, float CenterY, CMapItemGroup *pGroup)
+{
+	float Points[4];
+	RenderTools()->MapscreenToWorld(CenterX, CenterY, pGroup->m_ParallaxX/100.0f, pGroup->m_ParallaxY/100.0f,
+		pGroup->m_OffsetX, pGroup->m_OffsetY, Graphics()->ScreenAspect(), 1.0f, Points);
+	Graphics()->MapScreen(Points[0], Points[1], Points[2], Points[3]);
 }
 
 void CHud::RenderFps()
 {
-	if(Config()->m_ClShowfps)
+	if(g_Config.m_ClShowfps)
 	{
 		// calculate avg. fps
 		float FPS = 1.0f / Client()->RenderFrameTime();
 		m_AverageFPS = (m_AverageFPS*(1.0f-(1.0f/m_AverageFPS))) + (FPS*(1.0f/m_AverageFPS));
-		char aBuf[32];
-		str_format(aBuf, sizeof(aBuf), "%d", (int)m_AverageFPS);
-		TextRender()->Text(0, m_Width-10-TextRender()->TextWidth(0,12,aBuf,-1, -1.0f), 5, 12, aBuf, -1.0f);
+		char Buf[512];
+		str_format(Buf, sizeof(Buf), "%d", (int)m_AverageFPS);
+		TextRender()->Text(0, m_Width-5-TextRender()->TextWidth(0,8,Buf,-1), 2, 8, Buf, -1);
 	}
 }
 
@@ -454,25 +315,28 @@ void CHud::RenderConnectionWarning()
 	if(Client()->ConnectionProblems())
 	{
 		const char *pText = Localize("Connection Problems...");
-		float w = TextRender()->TextWidth(0, 24, pText, -1, -1.0f);
-		TextRender()->Text(0, 150*Graphics()->ScreenAspect()-w/2, 50, 24, pText, -1.0f);
+		float w = TextRender()->TextWidth(0, 24, pText, -1);
+		TextRender()->Text(0, 150*Graphics()->ScreenAspect()-w/2, 50, 24, pText, -1);
 	}
 }
 
 void CHud::RenderTeambalanceWarning()
 {
 	// render prompt about team-balance
-	if(m_pClient->m_GameInfo.m_GameFlags&GAMEFLAG_TEAMS && Config()->m_ClWarningTeambalance && m_pClient->m_ServerSettings.m_TeamBalance &&
-		absolute(m_pClient->m_GameInfo.m_aTeamSize[TEAM_RED]-m_pClient->m_GameInfo.m_aTeamSize[TEAM_BLUE]) >= NUM_TEAMS)
+	bool Flash = time_get()/(time_freq()/2)%2 == 0;
+	if(m_pClient->m_Snap.m_pGameInfoObj->m_GameFlags&GAMEFLAG_TEAMS)
 	{
-		bool Flash = time_get()/(time_freq()/2)%2 == 0;
-		const char *pText = Localize("Please balance teams!");
-		if(Flash)
-			TextRender()->TextColor(1,1,0.5f,1);
-		else
-			TextRender()->TextColor(0.7f,0.7f,0.2f,1.0f);
-		TextRender()->Text(0, 5, 50, 6, pText, -1.0f);
-		TextRender()->TextColor(1,1,1,1);
+		int TeamDiff = m_pClient->m_Snap.m_aTeamSize[TEAM_RED]-m_pClient->m_Snap.m_aTeamSize[TEAM_BLUE];
+		if (g_Config.m_ClWarningTeambalance && (TeamDiff >= 2 || TeamDiff <= -2))
+		{
+			const char *pText = Localize("Please balance teams!");
+			if(Flash)
+				TextRender()->TextColor(1,1,0.5f,1);
+			else
+				TextRender()->TextColor(0.7f,0.7f,0.2f,1.0f);
+			TextRender()->Text(0x0, 5, 50, 6, pText, -1);
+			TextRender()->TextColor(1,1,1,1);
+		}
 	}
 }
 
@@ -482,15 +346,18 @@ void CHud::RenderVoting()
 	if(!m_pClient->m_pVoting->IsVoting() || Client()->State() == IClient::STATE_DEMOPLAYBACK)
 		return;
 
-	CUIRect Rect = {-10.0f, 58.0f, 119.0f, 46.0f};
-	RenderTools()->DrawRoundRect(&Rect, vec4(0.0f, 0.0f, 0.0f, 0.4f), 5.0f);
+	Graphics()->TextureSet(-1);
+	Graphics()->QuadsBegin();
+	Graphics()->SetColor(0,0,0,0.40f);
+	RenderTools()->DrawRoundRect(-10, 60-2, 100+10+4+5, 46, 5.0f);
+	Graphics()->QuadsEnd();
 
 	TextRender()->TextColor(1,1,1,1);
 
 	CTextCursor Cursor;
 	char aBuf[512];
 	str_format(aBuf, sizeof(aBuf), Localize("%ds left"), m_pClient->m_pVoting->SecondsLeft());
-	float tw = TextRender()->TextWidth(0x0, 6, aBuf, -1, -1.0f);
+	float tw = TextRender()->TextWidth(0x0, 6, aBuf, -1);
 	TextRender()->SetCursor(&Cursor, 5.0f+100.0f-tw, 60.0f, 6.0f, TEXTFLAG_RENDER);
 	TextRender()->TextEx(&Cursor, aBuf, -1);
 
@@ -508,15 +375,14 @@ void CHud::RenderVoting()
 	CUIRect Base = {5, 88, 100, 4};
 	m_pClient->m_pVoting->RenderBars(Base, false);
 
-	char aBufYes[64], aBufNo[64];
-	m_pClient->m_pBinds->GetKey("vote yes", aBufYes, sizeof(aBufYes));
-	m_pClient->m_pBinds->GetKey("vote no", aBufNo, sizeof(aBufNo));
-	str_format(aBuf, sizeof(aBuf), "%s - %s", aBufYes, Localize("Vote yes"));
+	const char *pYesKey = m_pClient->m_pBinds->GetKey("vote yes");
+	const char *pNoKey = m_pClient->m_pBinds->GetKey("vote no");
+	str_format(aBuf, sizeof(aBuf), "%s - %s", pYesKey, Localize("Vote yes"));
 	Base.y += Base.h+1;
-	UI()->DoLabel(&Base, aBuf, 6.0f, CUI::ALIGN_LEFT);
+	UI()->DoLabel(&Base, aBuf, 6.0f, -1);
 
-	str_format(aBuf, sizeof(aBuf), "%s - %s", Localize("Vote no"), aBufNo);
-	UI()->DoLabel(&Base, aBuf, 6.0f, CUI::ALIGN_RIGHT);
+	str_format(aBuf, sizeof(aBuf), "%s - %s", Localize("Vote no"), pNoKey);
+	UI()->DoLabel(&Base, aBuf, 6.0f, 1);
 }
 
 void CHud::RenderCursor()
@@ -524,8 +390,7 @@ void CHud::RenderCursor()
 	if(!m_pClient->m_Snap.m_pLocalCharacter || Client()->State() == IClient::STATE_DEMOPLAYBACK)
 		return;
 
-	vec2 Pos = *m_pClient->m_pCamera->GetCenter();
-	RenderTools()->MapScreenToGroup(Pos.x, Pos.y, Layers()->GameGroup(), m_pClient->m_pCamera->GetZoom());
+	MapscreenToGroup(m_pClient->m_pCamera->m_Center.x, m_pClient->m_pCamera->m_Center.y, Layers()->GameGroup());
 	Graphics()->TextureSet(g_pData->m_aImages[IMAGE_GAME].m_Id);
 	Graphics()->QuadsBegin();
 
@@ -536,262 +401,202 @@ void CHud::RenderCursor()
 	Graphics()->QuadsEnd();
 }
 
-void CHud::RenderNinjaBar(float x, float y, float Progress)
-{
-	Progress = clamp(Progress, 0.0f, 1.0f);
-	const float EndWidth = 6.0f;
-	const float BarHeight = 12.0f;
-	const float WholeBarWidth = 120.f;
-	const float MiddleBarWidth = WholeBarWidth - (EndWidth * 2.0f);
-
-	IGraphics::CQuadItem QuadStartFull(x, y, EndWidth, BarHeight);
-	RenderTools()->SelectSprite(&g_pData->m_aSprites[SPRITE_NINJA_BAR_FULL_LEFT]);
-	Graphics()->QuadsDrawTL(&QuadStartFull, 1);
-	x += EndWidth;
-
-	const float FullBarWidth = MiddleBarWidth * Progress;
-	const float EmptyBarWidth = MiddleBarWidth - FullBarWidth;
-
-	// full bar
-	IGraphics::CQuadItem QuadFull(x, y, FullBarWidth, BarHeight);
-
-	CDataSprite SpriteBarFull = g_pData->m_aSprites[SPRITE_NINJA_BAR_FULL];
-	// prevent pixel puree, select only a small slice
-	if(Progress < 0.1f)
-	{
-		int spx = SpriteBarFull.m_X;
-		int spy = SpriteBarFull.m_Y;
-		float w = SpriteBarFull.m_W * 0.1f; // magic here
-		int h = SpriteBarFull.m_H;
-		int cx = SpriteBarFull.m_pSet->m_Gridx;
-		int cy = SpriteBarFull.m_pSet->m_Gridy;
-		float x1 = spx/(float)cx;
-		float x2 = (spx+w-1/32.0f)/(float)cx;
-		float y1 = spy/(float)cy;
-		float y2 = (spy+h-1/32.0f)/(float)cy;
-
-		Graphics()->QuadsSetSubset(x1, y1, x2, y2);
-	}
-	else
-		RenderTools()->SelectSprite(&SpriteBarFull);
-
-	Graphics()->QuadsDrawTL(&QuadFull, 1);
-
-	// empty bar
-	// select the middle portion of the sprite so we don't get edge bleeding
-	const CDataSprite SpriteBarEmpty = g_pData->m_aSprites[SPRITE_NINJA_BAR_EMPTY];
-	{
-		float spx = SpriteBarEmpty.m_X + 0.1f;
-		float spy = SpriteBarEmpty.m_Y;
-		float w = SpriteBarEmpty.m_W * 0.5f;
-		int h = SpriteBarEmpty.m_H;
-		int cx = SpriteBarEmpty.m_pSet->m_Gridx;
-		int cy = SpriteBarEmpty.m_pSet->m_Gridy;
-		float x1 = spx/(float)cx;
-		float x2 = (spx+w-1/32.0f)/(float)cx;
-		float y1 = spy/(float)cy;
-		float y2 = (spy+h-1/32.0f)/(float)cy;
-
-		Graphics()->QuadsSetSubset(x1, y1, x2, y2);
-	}
-
-	IGraphics::CQuadItem QuadEmpty(x + FullBarWidth, y, EmptyBarWidth, BarHeight);
-	Graphics()->QuadsDrawTL(&QuadEmpty, 1);
-
-	x += MiddleBarWidth;
-
-	IGraphics::CQuadItem QuadEndEmpty(x, y, EndWidth, BarHeight);
-	RenderTools()->SelectSprite(&g_pData->m_aSprites[SPRITE_NINJA_BAR_EMPTY_RIGHT]);
-	Graphics()->QuadsDrawTL(&QuadEndEmpty, 1);
-}
-
 void CHud::RenderHealthAndAmmo(const CNetObj_Character *pCharacter)
 {
 	if(!pCharacter)
 		return;
 
+	//mapscreen_to_group(gacenter_x, center_y, layers_game_group());
+
 	float x = 5;
 	float y = 5;
-	int i;
-	IGraphics::CQuadItem Array[10];
+
+	// render ammo count
+	// render gui stuff
 
 	Graphics()->TextureSet(g_pData->m_aImages[IMAGE_GAME].m_Id);
-	Graphics()->WrapClamp();
 
 	Graphics()->QuadsBegin();
-	Graphics()->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
 
-	// render ammo
-	if(pCharacter->m_Weapon == WEAPON_NINJA)
-	{
-		const int Max = g_pData->m_Weapons.m_Ninja.m_Duration * Client()->GameTickSpeed() / 1000;
-		float NinjaProgress = clamp(pCharacter->m_AmmoCount-Client()->GameTick(), 0, Max) / (float)Max;
-		RenderNinjaBar(x, y+24.f, NinjaProgress);
-	}
-	else
-	{
-		RenderTools()->SelectSprite(g_pData->m_Weapons.m_aId[pCharacter->m_Weapon%NUM_WEAPONS].m_pSpriteProj);
-		if(pCharacter->m_Weapon == WEAPON_GRENADE)
-		{
-			for(i = 0; i < min(pCharacter->m_AmmoCount, 10); i++)
-				Array[i] = IGraphics::CQuadItem(x+1+i*12, y+24, 10, 10);
-		}
-		else
-		{
-			for(i = 0; i < min(pCharacter->m_AmmoCount, 10); i++)
-				Array[i] = IGraphics::CQuadItem(x+i*12, y+24, 12, 12);
-		}
-		Graphics()->QuadsDrawTL(Array, i);
-	}
+	// if weaponstage is active, put a "glow" around the stage ammo
+	RenderTools()->SelectSprite(g_pData->m_Weapons.m_aId[pCharacter->m_Weapon%NUM_WEAPONS].m_pSpriteProj);
+	IGraphics::CQuadItem Array[10];
+	int i;
+	for (i = 0; i < min(pCharacter->m_AmmoCount, 10); i++)
+		Array[i] = IGraphics::CQuadItem(x+i*12,y+24,10,10);
+	Graphics()->QuadsDrawTL(Array, i);
+	Graphics()->QuadsEnd();
 
+	Graphics()->QuadsBegin();
 	int h = 0;
 
 	// render health
 	RenderTools()->SelectSprite(SPRITE_HEALTH_FULL);
 	for(; h < min(pCharacter->m_Health, 10); h++)
-		Array[h] = IGraphics::CQuadItem(x+h*12,y,12,12);
+		Array[h] = IGraphics::CQuadItem(x+h*12,y,10,10);
 	Graphics()->QuadsDrawTL(Array, h);
 
 	i = 0;
 	RenderTools()->SelectSprite(SPRITE_HEALTH_EMPTY);
 	for(; h < 10; h++)
-		Array[i++] = IGraphics::CQuadItem(x+h*12,y,12,12);
+		Array[i++] = IGraphics::CQuadItem(x+h*12,y,10,10);
 	Graphics()->QuadsDrawTL(Array, i);
 
 	// render armor meter
 	h = 0;
 	RenderTools()->SelectSprite(SPRITE_ARMOR_FULL);
 	for(; h < min(pCharacter->m_Armor, 10); h++)
-		Array[h] = IGraphics::CQuadItem(x+h*12,y+12,12,12);
+		Array[h] = IGraphics::CQuadItem(x+h*12,y+12,10,10);
 	Graphics()->QuadsDrawTL(Array, h);
 
 	i = 0;
 	RenderTools()->SelectSprite(SPRITE_ARMOR_EMPTY);
 	for(; h < 10; h++)
-		Array[i++] = IGraphics::CQuadItem(x+h*12,y+12,12,12);
+		Array[i++] = IGraphics::CQuadItem(x+h*12,y+12,10,10);
 	Graphics()->QuadsDrawTL(Array, i);
 	Graphics()->QuadsEnd();
-	Graphics()->WrapNormal();
 }
 
 void CHud::RenderSpectatorHud()
 {
 	// draw the box
-	const float Width = m_Width * 0.25f - 2.0f;
-	CUIRect Rect = {m_Width-Width, m_Height-15.0f, Width, 15.0f};
-	RenderTools()->DrawUIRect(&Rect, vec4(0.0f, 0.0f, 0.0f, 0.4f), CUI::CORNER_TL, 5.0f);
+	Graphics()->TextureSet(-1);
+	Graphics()->QuadsBegin();
+	Graphics()->SetColor(0.0f, 0.0f, 0.0f, 0.4f);
+	RenderTools()->DrawRoundRectExt(m_Width-180.0f, m_Height-15.0f, 180.0f, 15.0f, 5.0f, CUI::CORNER_TL);
+	Graphics()->QuadsEnd();
 
 	// draw the text
-	char aName[64];
-	const int SpecID = m_pClient->m_Snap.m_SpecInfo.m_SpectatorID;
-	const int SpecMode = m_pClient->m_Snap.m_SpecInfo.m_SpecMode;
-	str_format(aName, sizeof(aName), "%s", Config()->m_ClShowsocial ? m_pClient->m_aClients[m_pClient->m_Snap.m_SpecInfo.m_SpectatorID].m_aName : "");
 	char aBuf[128];
-
-	CTextCursor Cursor;
-	TextRender()->SetCursor(&Cursor, m_Width-Width+6.0f, m_Height-13.0f, 8.0f, TEXTFLAG_RENDER);
-
-	str_format(aBuf, sizeof(aBuf), "%s: ", Localize("Spectate"));
-	TextRender()->TextEx(&Cursor, aBuf, -1);
-
-	switch(SpecMode)
-	{
-	case SPEC_FREEVIEW:
-		str_format(aBuf, sizeof(aBuf), "%s", Localize("Free-View"));
-		break;
-	case SPEC_PLAYER:
-		str_format(aBuf, sizeof(aBuf), "%s", aName);
-		break;
-	case SPEC_FLAGRED:
-	case SPEC_FLAGBLUE:
-		char aFlag[64];
-		str_format(aFlag, sizeof(aFlag), SpecMode == SPEC_FLAGRED ? Localize("Red Flag") : Localize("Blue Flag"));
-
-		if(SpecID != -1)
-			str_format(aBuf, sizeof(aBuf), "%s (%s)", aFlag, aName);
-		else
-			str_format(aBuf, sizeof(aBuf), "%s", aFlag);
-		break;
-	}
-
-	if(SpecMode == SPEC_PLAYER || SpecID != -1)
-		RenderTools()->DrawClientID(TextRender(), &Cursor, SpecID);
-
-	TextRender()->TextEx(&Cursor, aBuf, -1);
+	str_format(aBuf, sizeof(aBuf), "%s: %s", Localize("Spectate"), m_pClient->m_Snap.m_SpecInfo.m_SpectatorID != SPEC_FREEVIEW ?
+		m_pClient->m_aClients[m_pClient->m_Snap.m_SpecInfo.m_SpectatorID].m_aName : Localize("Free-View"));
+	TextRender()->Text(0, m_Width-174.0f, m_Height-13.0f, 8.0f, aBuf, -1);
 }
 
-void CHud::RenderSpectatorNotification()
+void CHud::RenderSpeedmeter()
 {
-	if(m_pClient->m_aClients[m_pClient->m_LocalClientID].m_Team == TEAM_SPECTATORS &&
-		m_pClient->m_TeamChangeTime + 5.0f >= Client()->LocalTime())
-	{
-		// count non spectators
-		int NumPlayers = 0;
-		for(int i = 0; i < MAX_CLIENTS; i++)
-			if(m_pClient->m_aClients[i].m_Active && m_pClient->m_aClients[i].m_Team != TEAM_SPECTATORS)
-				NumPlayers++;
+	if(!g_Config.m_ClRenderSpeedmeter)
+		return;
+		
+	// We calculate the speed instead of getting it from character.velocity cause it's buggy when
+	// walking in front of a wall or when using the ninja sword
+	static float Speed;
+	static vec2 OldPos;
+	static const int SMOOTH_TABLE_SIZE = 16;
+	static const int ACCEL_THRESHOLD = 25;
+	static float SmoothTable[SMOOTH_TABLE_SIZE];
+	static int SmoothIndex = 0;
 
-		if(NumPlayers > 0)
+	SmoothTable[SmoothIndex] = distance(m_pClient->m_LocalCharacterPos, OldPos)/Client()->RenderFrameTime();
+	if(Client()->State() == IClient::STATE_DEMOPLAYBACK)
+	{
+		float Mult = DemoPlayer()->BaseInfo()->m_Speed;
+		SmoothTable[SmoothIndex] /= Mult;
+	}
+	SmoothIndex = (SmoothIndex + 1) % SMOOTH_TABLE_SIZE;
+	OldPos = m_pClient->m_LocalCharacterPos;
+	Speed = 0;
+	for(int i = 0; i < SMOOTH_TABLE_SIZE; i++)
+		Speed += SmoothTable[i];
+	Speed /= SMOOTH_TABLE_SIZE;
+
+	int GameFlags = m_pClient->m_Snap.m_pGameInfoObj->m_GameFlags&GAMEFLAG_FLAGS;
+	int LastIndex = SmoothIndex - 1;
+	if(LastIndex < 0)
+		LastIndex = SMOOTH_TABLE_SIZE - 1;
+
+	Graphics()->BlendNormal();
+	Graphics()->TextureSet(-1);
+	Graphics()->QuadsBegin();
+	if(g_Config.m_ClSpeedmeterAccel && Speed - SmoothTable[LastIndex] > ACCEL_THRESHOLD)
+		Graphics()->SetColor(0.6f, 0.1f, 0.1f, 0.25f);
+	else if(g_Config.m_ClSpeedmeterAccel && Speed - SmoothTable[LastIndex] < -ACCEL_THRESHOLD)
+		Graphics()->SetColor(0.1f, 0.6f, 0.1f, 0.25f);
+	else
+		Graphics()->SetColor(0.1, 0.1, 0.1, 0.25);
+	
+	if(GameFlags&GAMEFLAG_TEAMS)
+	{
+		char aScoreTeam[2][32];
+		str_format(aScoreTeam[TEAM_RED], sizeof(aScoreTeam)/2, "%d", m_pClient->m_Snap.m_pGameDataObj->m_TeamscoreRed);
+		str_format(aScoreTeam[TEAM_BLUE], sizeof(aScoreTeam)/2, "%d", m_pClient->m_Snap.m_pGameDataObj->m_TeamscoreBlue);
+		float aScoreTeamWidth[2] = {TextRender()->TextWidth(0, 14.0f, aScoreTeam[TEAM_RED], -1), TextRender()->TextWidth(0, 14.0f, aScoreTeam[TEAM_BLUE], -1)};
+		float ScoreWidthMax = max(max(aScoreTeamWidth[TEAM_RED], aScoreTeamWidth[TEAM_BLUE]), TextRender()->TextWidth(0, 14.0f, "100", -1));
+		float Split = 3.0f;
+		float ImageSize = GameFlags&GAMEFLAG_FLAGS ? 16.0f : Split;
+		
+		RenderTools()->DrawRoundRectExt(m_Width-ScoreWidthMax-ImageSize-2*Split, 225.0f, ScoreWidthMax+ImageSize+2*Split, 18.0f, 5.0f, CUI::CORNER_L);
+	}
+	else
+	{
+		const CNetObj_PlayerInfo *apPlayerInfo[2] = { 0, 0 };
+		int i = 0;
+		for(int j = 0; j < 2 && i < MAX_CLIENTS && m_pClient->m_Snap.m_paInfoByScore[i]; ++i)
 		{
-			const char *pText = Localize("Click on a player or a flag to follow it");
-			float FontSize = 16.0f;
-			float w = TextRender()->TextWidth(0, FontSize, pText, -1, -1.0f);
-			TextRender()->Text(0, 150 * Graphics()->ScreenAspect() - w / 2, 30, FontSize, pText, -1.0f);
+			if(m_pClient->m_Snap.m_paInfoByScore[i]->m_Team != TEAM_SPECTATORS)
+			{
+				apPlayerInfo[j] = m_pClient->m_Snap.m_paInfoByScore[i];
+				++j;
+			}
 		}
+
+		char aScore[2][32];
+		for(int j = 0; j < 2; ++j)
+		{
+			if(apPlayerInfo[j])
+				str_format(aScore[j], sizeof(aScore)/2, "%d", apPlayerInfo[j]->m_Score);
+			else
+				aScore[j][0] = 0;
+		}
+		float aScoreWidth[2] = {TextRender()->TextWidth(0, 14.0f, aScore[0], -1), TextRender()->TextWidth(0, 14.0f, aScore[1], -1)};
+		float ScoreWidthMax = max(max(aScoreWidth[0], aScoreWidth[1]), TextRender()->TextWidth(0, 14.0f, "10", -1));
+		
+		RenderTools()->DrawRoundRectExt(m_Width-ScoreWidthMax-38.0f, 225.0f, ScoreWidthMax+38.0f, 18.0f, 5.0f, CUI::CORNER_L);
 	}
+ 	Graphics()->QuadsEnd();
+
+	char aBuf[16];
+	str_format(aBuf, sizeof(aBuf), "%.0f", Speed/10);
+	TextRender()->Text(0, m_Width-5-TextRender()->TextWidth(0,12,aBuf,-1), 226, 12, aBuf, -1);
 }
 
-void CHud::RenderReadyUpNotification()
+void CHud::RenderRaceTime()
 {
-	if(!(m_pClient->m_Snap.m_paPlayerInfos[m_pClient->m_LocalClientID]->m_PlayerFlags&PLAYERFLAG_READY))
-	{
-		char aKey[64], aText[128];
-		m_pClient->m_pBinds->GetKey("ready_change", aKey, sizeof(aKey));
-		str_format(aText, sizeof(aText), Localize("When ready, press <%s>"), aKey);
-		float FontSize = 16.0f;
-		float w = TextRender()->TextWidth(0, FontSize, aText, -1, -1.0f);
-		TextRender()->Text(0, 150 * Graphics()->ScreenAspect() - w / 2, 30, FontSize, aText, -1.0f);
-	}
-}
-
-void CHud::RenderRaceTime(const CNetObj_PlayerInfoRace *pRaceInfo)
-{
-	if(!pRaceInfo || pRaceInfo->m_RaceStartTick == -1)
+	if(g_Config.m_ClRaceReplaceGametime)
 		return;
 
 	char aBuf[32];
-	int RaceTime = (Client()->GameTick() - pRaceInfo->m_RaceStartTick)*1000/Client()->GameTickSpeed();
-	FormatTime(aBuf, sizeof(aBuf), RaceTime, min(m_pClient->RacePrecision(), 1));
+	int RaceTime = (Client()->GameTick()+m_pClient->m_Snap.m_pGameInfoObj->m_WarmupTimer)*10/Client()->GameTickSpeed();
+	bool RaceFlag = m_pClient->m_Snap.m_pGameInfoObj->m_GameStateFlags&GAMESTATEFLAG_RACETIME;
+
+	if(RaceFlag)
+		str_format(aBuf, sizeof(aBuf), "%02d:%02d.%d", RaceTime/(60*10), (RaceTime/10)%60, RaceTime%10);
+	else if(m_RaceTime)
+		str_format(aBuf, sizeof(aBuf), "%02d:%02d", m_RaceTime/60, m_RaceTime%60);
+	else
+		return;
 
 	float Half = 300.0f*Graphics()->ScreenAspect()/2.0f;
-	float w = TextRender()->TextWidth(0, 12, "00:00.0", -1, -1.0f);
-
-	Graphics()->TextureSet(g_pData->m_aImages[IMAGE_TIMERCLOCK].m_Id);
-	Graphics()->QuadsBegin();
-	RenderTools()->SelectSprite(SPRITE_TIMERCLOCK_A);
-	IGraphics::CQuadItem QuadItem(Half-w/2-18.f, 20, 15, 15);
-	Graphics()->QuadsDrawTL(&QuadItem, 1);
-	Graphics()->QuadsEnd();
-
+	float w = TextRender()->TextWidth(0, 12, aBuf, -1);
 	TextRender()->Text(0, Half-w/2, 20, 12, aBuf, -1);
 }
 
 void CHud::RenderCheckpoint()
 {
-	int64 TimeSinceCheckpoint = time_get() - m_CheckpointTime;
-	if(m_CheckpointTime != 0 && TimeSinceCheckpoint < time_freq() * 4)
+	int TicksSinceCheckpoint = Client()->GameTick() - m_CheckpointTick;
+	if(m_CheckpointTick != -1 && TicksSinceCheckpoint < Client()->GameTickSpeed()*4)
 	{
 		char aBuf[64];
-		FormatTimeDiff(aBuf, sizeof(aBuf), m_CheckpointDiff, 2);
-
+		IRace::FormatTimeDiff(aBuf, sizeof(aBuf), m_CheckpointDiff, false);
+			
 		// calculate alpha (2 sec 1 than get lower the next 2 sec)
 		float a = 1.0f;
-		if(TimeSinceCheckpoint > time_freq() * 2)
+		if(TicksSinceCheckpoint > Client()->GameTickSpeed()*2)
 		{
 			// lower the alpha slowly to blend text out
-			a = (time_freq() * 4 - TimeSinceCheckpoint) / (float)(time_freq() * 2);
+			a = (Client()->GameTickSpeed()*4 - TicksSinceCheckpoint) / (float)(Client()->GameTickSpeed()*2);
 		}
-
+			
 		if(m_CheckpointDiff > 0)
 			TextRender()->TextColor(1.0f,0.5f,0.5f,a); // red
 		else if(m_CheckpointDiff < 0)
@@ -800,83 +605,100 @@ void CHud::RenderCheckpoint()
 			TextRender()->TextColor(1,1,1,a); // white
 
 		float Half = 300.0f*Graphics()->ScreenAspect()/2.0f;
-		float w = TextRender()->TextWidth(0, 10, aBuf, -1, -1.0f);
+		float w = TextRender()->TextWidth(0, 10, aBuf, -1);
 		TextRender()->Text(0, Half-w/2, 33, 10, aBuf, -1);
 
 		TextRender()->TextColor(1,1,1,1);
 	}
 }
 
-void CHud::OnMessage(int MsgType, void *pRawMsg)
+void CHud::RenderRecord()
 {
-	if(MsgType == NETMSGTYPE_SV_CHECKPOINT)
+	// TODO: fix this
+	if(m_ServerRecord && g_Config.m_ClShowServerRecord)
 	{
-		CNetMsg_Sv_Checkpoint *pMsg = (CNetMsg_Sv_Checkpoint *)pRawMsg;
-		m_CheckpointDiff = pMsg->m_Diff;
-		m_CheckpointTime = time_get();
-	}
-	else if(MsgType == NETMSGTYPE_SV_KILLMSG && (m_pClient->m_GameInfo.m_GameFlags&GAMEFLAG_RACE))
-	{
-		// reset checkpoint time on death
-		CNetMsg_Sv_KillMsg *pMsg = (CNetMsg_Sv_KillMsg *)pRawMsg;
-		if(pMsg->m_Victim == m_pClient->m_LocalClientID)
-			m_CheckpointTime = 0;
+		char aBuf[64];
+		char aTime[32];
+		IRace::FormatTimeShort(aTime, sizeof(aTime), m_ServerRecord, true);
+		str_format(aBuf, sizeof(aBuf), "%s: %s", Localize("Server best"), aTime);
+		TextRender()->Text(0, 5, 40, 6, aBuf, -1);
 	}
 }
 
 void CHud::OnRender()
 {
-	if(!m_pClient->m_Snap.m_pGameData)
+	if(!m_pClient->m_Snap.m_pGameInfoObj)
 		return;
 
-	// dont render hud if the menu is active
-	if(m_pClient->m_pMenus->IsActive())
-		return;
-
-	bool Race = m_pClient->m_GameInfo.m_GameFlags&GAMEFLAG_RACE;
+	CServerInfo ServerInfo;
+	Client()->GetServerInfo(&ServerInfo);
+	bool Race = IsRace(&ServerInfo);
 
 	m_Width = 300.0f*Graphics()->ScreenAspect();
 	m_Height = 300.0f;
 	Graphics()->MapScreen(0.0f, 0.0f, m_Width, m_Height);
 
-	if(Config()->m_ClShowhud)
+	if(g_Config.m_ClShowhud)
 	{
-		if(m_pClient->m_Snap.m_pLocalCharacter && !(m_pClient->m_Snap.m_pGameData->m_GameStateFlags&(GAMESTATEFLAG_ROUNDOVER|GAMESTATEFLAG_GAMEOVER)))
+		if(m_pClient->m_Snap.m_pLocalCharacter && !(m_pClient->m_Snap.m_pGameInfoObj->m_GameStateFlags&GAMESTATEFLAG_GAMEOVER))
 		{
 			RenderHealthAndAmmo(m_pClient->m_Snap.m_pLocalCharacter);
-			if(Race)
-			{
-				RenderRaceTime(m_pClient->m_Snap.m_paPlayerInfosRace[m_pClient->m_LocalClientID]);
-				RenderCheckpoint();
-			}
+			RenderSpeedmeter();
+			RenderRaceTime();
+			if(Race && g_Config.m_ClShowCheckpointDiff) RenderCheckpoint();
 		}
 		else if(m_pClient->m_Snap.m_SpecInfo.m_Active)
 		{
-			if(m_pClient->m_Snap.m_SpecInfo.m_SpectatorID != -1)
-			{
+			if(m_pClient->m_Snap.m_SpecInfo.m_SpectatorID != SPEC_FREEVIEW)
 				RenderHealthAndAmmo(&m_pClient->m_Snap.m_aCharacters[m_pClient->m_Snap.m_SpecInfo.m_SpectatorID].m_Cur);
-				if(Race)
-				{
-					RenderRaceTime(m_pClient->m_Snap.m_paPlayerInfosRace[m_pClient->m_Snap.m_SpecInfo.m_SpectatorID]);
-					RenderCheckpoint();
-				}
-			}
 			RenderSpectatorHud();
-			RenderSpectatorNotification();
 		}
 
 		RenderGameTimer();
-		RenderPauseTimer();
-		RenderStartCountdown();
-		RenderNetworkIssueNotification();
-		RenderDeadNotification();
-		RenderScoreHud();
+		RenderPauseNotification();
+		RenderSuddenDeath();
+		if(!Race) RenderScoreHud();
 		RenderWarmupTimer();
 		RenderFps();
 		if(Client()->State() != IClient::STATE_DEMOPLAYBACK)
 			RenderConnectionWarning();
-		RenderTeambalanceWarning();
+		if(!Race) RenderTeambalanceWarning();
 		RenderVoting();
+		if(Race) RenderRecord();
 	}
 	RenderCursor();
+}
+
+void CHud::OnMessage(int MsgType, void *pRawMsg)
+{
+	CServerInfo ServerInfo;
+	Client()->GetServerInfo(&ServerInfo);
+
+	if(MsgType == NETMSGTYPE_SV_RACETIME)
+	{
+		CNetMsg_Sv_RaceTime *pMsg = (CNetMsg_Sv_RaceTime *)pRawMsg;
+		if(!IsDDNet(&ServerInfo))
+			m_RaceTime = pMsg->m_Time;
+		
+		if(pMsg->m_Check)
+		{
+			m_CheckpointDiff = pMsg->m_Check * 10;
+			m_CheckpointTick = Client()->GameTick();
+		}
+	}
+	else if(MsgType == NETMSGTYPE_SV_KILLMSG)
+	{
+		CNetMsg_Sv_KillMsg *pMsg = (CNetMsg_Sv_KillMsg *)pRawMsg;
+		if(pMsg->m_Victim == m_pClient->m_Snap.m_LocalClientID)
+		{
+			m_CheckpointTick = -1;
+			m_RaceTime = 0;
+		}
+	}
+	else if(MsgType == NETMSGTYPE_SV_RECORD)
+	{
+		CNetMsg_Sv_Record *pMsg = (CNetMsg_Sv_Record *)pRawMsg;
+		if(IsDDNet(&ServerInfo)) pMsg->m_Time *= 10;
+		m_ServerRecord = pMsg->m_Time;
+	}
 }

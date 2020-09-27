@@ -6,35 +6,15 @@
 
 class CMapImages : public CComponent
 {
-	enum
-	{
-		MAX_TEXTURES=64,
-
-		MAP_TYPE_GAME=0,
-		MAP_TYPE_MENU,
-		NUM_MAP_TYPES
-	};
-	struct
-	{
-		IGraphics::CTextureHandle m_aTextures[MAX_TEXTURES];
-		int m_Count;
-	} m_Info[NUM_MAP_TYPES];
-
-	IGraphics::CTextureHandle m_EasterTexture;
-	bool m_EasterIsLoaded;
-
-	void LoadMapImages(class IMap *pMap, class CLayers *pLayers, int MapType);
-
+	int m_aTextures[64];
+	int m_Count;
 public:
 	CMapImages();
 
-	IGraphics::CTextureHandle Get(int Index) const;
-	int Num() const;
+	int Get(int Index) const { return m_aTextures[Index]; }
+	int Num() const { return m_Count; }
 
 	virtual void OnMapLoad();
-	void OnMenuMapLoad(class IMap *pMap);
-	
-	IGraphics::CTextureHandle GetEasterTexture();
 };
 
 #endif

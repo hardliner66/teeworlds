@@ -5,19 +5,11 @@
 #include <engine/shared/config.h>
 #include <engine/graphics.h>
 #include <engine/textrender.h>
-#include <engine/keys.h>
-#include <engine/input.h>
 #include "ui.h"
 
 /********************************************************
  UI
 *********************************************************/
-
-const vec4 CUI::ms_DefaultTextColor(1.0f, 1.0f, 1.0f, 1.0f);
-const vec4 CUI::ms_DefaultTextOutlineColor(0.0f, 0.0f, 0.0f, 0.3f);
-const vec4 CUI::ms_HighlightTextColor(0.0f, 0.0f, 0.0f, 1.0f);
-const vec4 CUI::ms_HighlightTextOutlineColor(1.0f, 1.0f, 1.0f, 0.25f);
-const vec4 CUI::ms_TransparentTextColor(1.0f, 1.0f, 1.0f, 0.5f);
 
 CUI::CUI()
 {
@@ -32,56 +24,53 @@ CUI::CUI()
 	m_MouseWorldY = 0;
 	m_MouseButtons = 0;
 	m_LastMouseButtons = 0;
-	m_UseMouseButtons = true;
 
 	m_Screen.x = 0;
 	m_Screen.y = 0;
-
-	m_NumClips = 0;
+	m_Screen.w = 848.0f;
+	m_Screen.h = 480.0f;
 }
 
-void CUI::Update(float MouseX, float MouseY, float MouseWorldX, float MouseWorldY)
+int CUI::Update(float Mx, float My, float Mwx, float Mwy, int Buttons)
 {
-	unsigned MouseButtons = 0;
-	if(m_UseMouseButtons)
-	{
-		if(Input()->KeyIsPressed(KEY_MOUSE_1)) MouseButtons |= 1;
-		if(Input()->KeyIsPressed(KEY_MOUSE_2)) MouseButtons |= 2;
-		if(Input()->KeyIsPressed(KEY_MOUSE_3)) MouseButtons |= 4;
-	}
-
-	m_MouseX = MouseX;
-	m_MouseY = MouseY;
-	m_MouseWorldX = MouseWorldX;
-	m_MouseWorldY = MouseWorldY;
+	m_MouseX = Mx;
+	m_MouseY = My;
+	m_MouseWorldX = Mwx;
+	m_MouseWorldY = Mwy;
 	m_LastMouseButtons = m_MouseButtons;
-	m_MouseButtons = MouseButtons;
+	m_MouseButtons = Buttons;
 	m_pHotItem = m_pBecommingHotItem;
 	if(m_pActiveItem)
 		m_pHotItem = m_pActiveItem;
 	m_pBecommingHotItem = 0;
+	return 0;
 }
 
-void CUI::ConvertCursorMove(float *pX, float *pY, int CursorType) const
+int CUI::MouseInside(const CUIRect *r)
 {
-	float Factor = 1.0f;
-	switch(CursorType)
-	{
-		case IInput::CURSOR_MOUSE:
-			Factor = Config()->m_UiMousesens/100.0f;
-			break;
-		case IInput::CURSOR_JOYSTICK:
-			Factor = Config()->m_UiJoystickSens/100.0f;
-			break;
-	}
-	*pX *= Factor;
-	*pY *= Factor;
+	if(m_MouseX >= r->x && m_MouseX <= r->x+r->w && m_MouseY >= r->y && m_MouseY <= r->y+r->h)
+		return 1;
+	return 0;
 }
 
-const CUIRect *CUI::Screen()
+void CUI::ConvertMouseMove(float *x, float *y)
 {
-	m_Screen.h = 600;
-	m_Screen.w = Graphics()->ScreenAspect()*m_Screen.h;
+	float Fac = (float)(g_Config.m_UiMousesens)/g_Config.m_InpMousesens;
+	*x = *x*Fac;
+	*y = *y*Fac;
+}
+
+CUIRect *CUI::Screen()
+{
+	float Aspect = Graphics()->ScreenAspect();
+	float w, h;
+
+	h = 600;
+	w = Aspect*h;
+
+	m_Screen.w = w;
+	m_Screen.h = h;
+
 	return &m_Screen;
 }
 
@@ -90,81 +79,59 @@ float CUI::PixelSize()
 	return Screen()->w/Graphics()->ScreenWidth();
 }
 
-void CUI::ClipEnable(const CUIRect *pRect)
+void CUI::SetScale(float s)
 {
-	if(IsClipped())
-	{
-		dbg_assert(m_NumClips < MAX_CLIP_NESTING_DEPTH, "max clip nesting depth exceeded");
-		const CUIRect *pOldRect = ClipArea();
-		CUIRect Intersection;
-		Intersection.x = max(pRect->x, pOldRect->x);
-		Intersection.y = max(pRect->y, pOldRect->y);
-		Intersection.w = min(pRect->x+pRect->w, pOldRect->x+pOldRect->w) - pRect->x;
-		Intersection.h = min(pRect->y+pRect->h, pOldRect->y+pOldRect->h) - pRect->y;
-		m_aClips[m_NumClips] = Intersection;
-	}
-	else
-	{
-		m_aClips[m_NumClips] = *pRect;
-	}
-	m_NumClips++;
-	UpdateClipping();
+	g_Config.m_UiScale = (int)(s*100.0f);
+}
+
+float CUI::Scale()
+{
+	return g_Config.m_UiScale/100.0f;
+}
+
+float CUIRect::Scale() const
+{
+	return g_Config.m_UiScale/100.0f;
+}
+
+void CUI::ClipEnable(const CUIRect *r)
+{
+	float XScale = Graphics()->ScreenWidth()/Screen()->w;
+	float YScale = Graphics()->ScreenHeight()/Screen()->h;
+	Graphics()->ClipEnable((int)(r->x*XScale), (int)(r->y*YScale), (int)(r->w*XScale), (int)(r->h*YScale));
 }
 
 void CUI::ClipDisable()
 {
-	dbg_assert(m_NumClips > 0, "no clip region");
-	m_NumClips--;
-	UpdateClipping();
+	Graphics()->ClipDisable();
 }
 
-const CUIRect *CUI::ClipArea() const
-{
-	dbg_assert(m_NumClips > 0, "no clip region");
-	return &m_aClips[m_NumClips - 1];
-}
-
-void CUI::UpdateClipping()
-{
-	if(IsClipped())
-	{
-		const CUIRect *pRect = ClipArea();
-		const float XScale = Graphics()->ScreenWidth()/Screen()->w;
-		const float YScale = Graphics()->ScreenHeight()/Screen()->h;
-		Graphics()->ClipEnable((int)(pRect->x*XScale), (int)(pRect->y*YScale), (int)(pRect->w*XScale), (int)(pRect->h*YScale));
-	}
-	else
-	{
-		Graphics()->ClipDisable();
-	}
-}
-
-void CUIRect::HSplitMid(CUIRect *pTop, CUIRect *pBottom, float Spacing) const
+void CUIRect::HSplitMid(CUIRect *pTop, CUIRect *pBottom) const
 {
 	CUIRect r = *this;
-	const float Cut = r.h/2;
-	const float HalfSpacing = Spacing/2;
+	float Cut = r.h/2;
 
 	if(pTop)
 	{
 		pTop->x = r.x;
 		pTop->y = r.y;
 		pTop->w = r.w;
-		pTop->h = Cut - HalfSpacing;
+		pTop->h = Cut;
 	}
 
 	if(pBottom)
 	{
 		pBottom->x = r.x;
-		pBottom->y = r.y + Cut + HalfSpacing;
+		pBottom->y = r.y + Cut;
 		pBottom->w = r.w;
-		pBottom->h = r.h - Cut - HalfSpacing;
+		pBottom->h = r.h - Cut;
 	}
 }
 
 void CUIRect::HSplitTop(float Cut, CUIRect *pTop, CUIRect *pBottom) const
 {
 	CUIRect r = *this;
+	Cut *= Scale();
 
 	if (pTop)
 	{
@@ -186,6 +153,7 @@ void CUIRect::HSplitTop(float Cut, CUIRect *pTop, CUIRect *pBottom) const
 void CUIRect::HSplitBottom(float Cut, CUIRect *pTop, CUIRect *pBottom) const
 {
 	CUIRect r = *this;
+	Cut *= Scale();
 
 	if (pTop)
 	{
@@ -205,25 +173,25 @@ void CUIRect::HSplitBottom(float Cut, CUIRect *pTop, CUIRect *pBottom) const
 }
 
 
-void CUIRect::VSplitMid(CUIRect *pLeft, CUIRect *pRight, float Spacing) const
+void CUIRect::VSplitMid(CUIRect *pLeft, CUIRect *pRight) const
 {
 	CUIRect r = *this;
-	const float Cut = r.w/2;
-	const float HalfSpacing = Spacing/2;
+	float Cut = r.w/2;
+//	Cut *= Scale();
 
 	if (pLeft)
 	{
 		pLeft->x = r.x;
 		pLeft->y = r.y;
-		pLeft->w = Cut - HalfSpacing;
+		pLeft->w = Cut;
 		pLeft->h = r.h;
 	}
 
 	if (pRight)
 	{
-		pRight->x = r.x + Cut + HalfSpacing;
+		pRight->x = r.x + Cut;
 		pRight->y = r.y;
-		pRight->w = r.w - Cut - HalfSpacing;
+		pRight->w = r.w - Cut;
 		pRight->h = r.h;
 	}
 }
@@ -231,6 +199,7 @@ void CUIRect::VSplitMid(CUIRect *pLeft, CUIRect *pRight, float Spacing) const
 void CUIRect::VSplitLeft(float Cut, CUIRect *pLeft, CUIRect *pRight) const
 {
 	CUIRect r = *this;
+	Cut *= Scale();
 
 	if (pLeft)
 	{
@@ -252,6 +221,7 @@ void CUIRect::VSplitLeft(float Cut, CUIRect *pLeft, CUIRect *pRight) const
 void CUIRect::VSplitRight(float Cut, CUIRect *pLeft, CUIRect *pRight) const
 {
 	CUIRect r = *this;
+	Cut *= Scale();
 
 	if (pLeft)
 	{
@@ -273,6 +243,7 @@ void CUIRect::VSplitRight(float Cut, CUIRect *pLeft, CUIRect *pRight) const
 void CUIRect::Margin(float Cut, CUIRect *pOtherRect) const
 {
 	CUIRect r = *this;
+	Cut *= Scale();
 
 	pOtherRect->x = r.x + Cut;
 	pOtherRect->y = r.y + Cut;
@@ -283,6 +254,7 @@ void CUIRect::Margin(float Cut, CUIRect *pOtherRect) const
 void CUIRect::VMargin(float Cut, CUIRect *pOtherRect) const
 {
 	CUIRect r = *this;
+	Cut *= Scale();
 
 	pOtherRect->x = r.x + Cut;
 	pOtherRect->y = r.y;
@@ -293,6 +265,7 @@ void CUIRect::VMargin(float Cut, CUIRect *pOtherRect) const
 void CUIRect::HMargin(float Cut, CUIRect *pOtherRect) const
 {
 	CUIRect r = *this;
+	Cut *= Scale();
 
 	pOtherRect->x = r.x;
 	pOtherRect->y = r.y + Cut;
@@ -300,26 +273,19 @@ void CUIRect::HMargin(float Cut, CUIRect *pOtherRect) const
 	pOtherRect->h = r.h - 2*Cut;
 }
 
-bool CUIRect::Inside(float x, float y) const
-{
-	return x >= this->x
-		&& x < this->x + this->w
-		&& y >= this->y
-		&& y < this->y + this->h;
-}
-
-bool CUI::DoButtonLogic(const void *pID, const CUIRect *pRect)
+int CUI::DoButtonLogic(const void *pID, const char *pText, int Checked, const CUIRect *pRect)
 {
 	// logic
-	bool Clicked = false;
-	const bool Hovered = MouseHovered(pRect);
+	int ReturnValue = 0;
+	int Inside = MouseInside(pRect);
+	static int ButtonUsed = 0;
 
-	if(CheckActiveItem(pID))
+	if(ActiveItem() == pID)
 	{
-		if(!MouseButton(0))
+		if(!MouseButton(ButtonUsed))
 		{
-			if(Hovered)
-				Clicked = true;
+			if(Inside && Checked >= 0)
+				ReturnValue = 1+ButtonUsed;
 			SetActiveItem(0);
 		}
 	}
@@ -328,80 +294,80 @@ bool CUI::DoButtonLogic(const void *pID, const CUIRect *pRect)
 		if(MouseButton(0))
 		{
 			SetActiveItem(pID);
+			ButtonUsed = 0;
+		}
+
+		if(MouseButton(1))
+		{
+			SetActiveItem(pID);
+			ButtonUsed = 1;
 		}
 	}
 
-	if(Hovered && !MouseButton(0))
+	if(Inside)
 		SetHotItem(pID);
 
-	return Clicked;
+	return ReturnValue;
 }
-
-bool CUI::DoPickerLogic(const void *pID, const CUIRect *pRect, float *pX, float *pY)
+/*
+int CUI::DoButton(const void *id, const char *text, int checked, const CUIRect *r, ui_draw_button_func draw_func, const void *extra)
 {
-	if(CheckActiveItem(pID))
+	// logic
+	int ret = 0;
+	int inside = ui_MouseInside(r);
+	static int button_used = 0;
+
+	if(ui_ActiveItem() == id)
 	{
-		if(!MouseButton(0))
-			SetActiveItem(0);
+		if(!ui_MouseButton(button_used))
+		{
+			if(inside && checked >= 0)
+				ret = 1+button_used;
+			ui_SetActiveItem(0);
+		}
 	}
-	else if(HotItem() == pID)
+	else if(ui_HotItem() == id)
 	{
-		if(MouseButton(0))
-			SetActiveItem(pID);
+		if(ui_MouseButton(0))
+		{
+			ui_SetActiveItem(id);
+			button_used = 0;
+		}
+
+		if(ui_MouseButton(1))
+		{
+			ui_SetActiveItem(id);
+			button_used = 1;
+		}
 	}
 
-	if(MouseHovered(pRect))
-		SetHotItem(pID);
+	if(inside)
+		ui_SetHotItem(id);
 
-	if(!CheckActiveItem(pID))
-		return false;
+	if(draw_func)
+		draw_func(id, text, checked, r, extra);
+	return ret;
+}*/
 
-	if(pX)
-		*pX = clamp(m_MouseX - pRect->x, 0.0f, pRect->w);
-	if(pY)
-		*pY = clamp(m_MouseY - pRect->y, 0.0f, pRect->h);
-
-	return true;
-}
-
-void CUI::DoLabel(const CUIRect *pRect, const char *pText, float FontSize, EAlignment Align, float LineWidth, bool MultiLine)
+void CUI::DoLabel(const CUIRect *r, const char *pText, float Size, int Align, int MaxWidth)
 {
 	// TODO: FIX ME!!!!
 	//Graphics()->BlendNormal();
-
-	float TextX = pRect->x;
-	switch(Align)
+	if(Align == 0)
 	{
-	case ALIGN_CENTER:
-		TextX += pRect->w/2.0f - TextRender()->TextWidth(0, FontSize, pText, -1, LineWidth)/2.0f;
-		break;
-	case ALIGN_LEFT:
-		// default is left aligned
-		break;
-	case ALIGN_RIGHT:
-		TextX += pRect->w - TextRender()->TextWidth(0, FontSize, pText, -1, LineWidth);
-		break;
+		float tw = TextRender()->TextWidth(0, Size, pText, MaxWidth);
+		TextRender()->Text(0, r->x + r->w/2-tw/2, r->y - Size/10, Size, pText, MaxWidth);
 	}
-
-	TextRender()->Text(0, TextX, pRect->y - FontSize/10.0f, FontSize, pText, LineWidth, MultiLine);
+	else if(Align < 0)
+		TextRender()->Text(0, r->x, r->y - Size/10, Size, pText, MaxWidth);
+	else if(Align > 0)
+	{
+		float tw = TextRender()->TextWidth(0, Size, pText, MaxWidth);
+		TextRender()->Text(0, r->x + r->w-tw, r->y - Size/10, Size, pText, MaxWidth);
+	}
 }
 
-void CUI::DoLabelHighlighted(const CUIRect *pRect, const char *pText, const char *pHighlighted, float FontSize, const vec4 &TextColor, const vec4 &HighlightColor)
+void CUI::DoLabelScaled(const CUIRect *r, const char *pText, float Size, int Align, int MaxWidth)
 {
-	CTextCursor Cursor;
-	TextRender()->SetCursor(&Cursor, pRect->x, pRect->y, FontSize, TEXTFLAG_RENDER | TEXTFLAG_STOP_AT_END);
-	Cursor.m_LineWidth = pRect->w;
-
-	TextRender()->TextColor(TextColor);
-	const char *pMatch = pHighlighted && pHighlighted[0] ? str_find_nocase(pText, pHighlighted) : 0;
-	if(pMatch)
-	{
-		TextRender()->TextEx(&Cursor, pText, (int)(pMatch - pText));
-		TextRender()->TextColor(HighlightColor);
-		TextRender()->TextEx(&Cursor, pMatch, str_length(pHighlighted));
-		TextRender()->TextColor(TextColor);
-		TextRender()->TextEx(&Cursor, pMatch + str_length(pHighlighted), -1);
-	}
-	else
-		TextRender()->TextEx(&Cursor, pText, -1);
+	DoLabel(r, pText, Size*Scale(), Align, MaxWidth);
 }

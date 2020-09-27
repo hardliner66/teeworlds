@@ -14,7 +14,6 @@ CRegister::CRegister()
 {
 	m_pNetServer = 0;
 	m_pMasterServer = 0;
-	m_pConfig = 0;
 	m_pConsole = 0;
 
 	m_RegisterState = REGISTERSTATE_START;
@@ -32,7 +31,7 @@ void CRegister::RegisterNewState(int State)
 	m_RegisterStateStart = time_get();
 }
 
-void CRegister::RegisterSendFwcheckresponse(NETADDR *pAddr, TOKEN Token)
+void CRegister::RegisterSendFwcheckresponse(NETADDR *pAddr)
 {
 	CNetChunk Packet;
 	Packet.m_ClientID = -1;
@@ -40,13 +39,13 @@ void CRegister::RegisterSendFwcheckresponse(NETADDR *pAddr, TOKEN Token)
 	Packet.m_Flags = NETSENDFLAG_CONNLESS;
 	Packet.m_DataSize = sizeof(SERVERBROWSE_FWRESPONSE);
 	Packet.m_pData = SERVERBROWSE_FWRESPONSE;
-	m_pNetServer->Send(&Packet, Token);
+	m_pNetServer->Send(&Packet);
 }
 
 void CRegister::RegisterSendHeartbeat(NETADDR Addr)
 {
 	static unsigned char aData[sizeof(SERVERBROWSE_HEARTBEAT) + 2];
-	unsigned short Port = m_pConfig->m_SvPort;
+	unsigned short Port = g_Config.m_SvPort;
 	CNetChunk Packet;
 
 	mem_copy(aData, SERVERBROWSE_HEARTBEAT, sizeof(SERVERBROWSE_HEARTBEAT));
@@ -58,8 +57,8 @@ void CRegister::RegisterSendHeartbeat(NETADDR Addr)
 	Packet.m_pData = &aData;
 
 	// supply the set port that the master can use if it has problems
-	if(m_pConfig->m_SvExternalPort)
-		Port = m_pConfig->m_SvExternalPort;
+	if(g_Config.m_SvExternalPort)
+		Port = g_Config.m_SvExternalPort;
 	aData[sizeof(SERVERBROWSE_HEARTBEAT)] = Port >> 8;
 	aData[sizeof(SERVERBROWSE_HEARTBEAT)+1] = Port&0xff;
 	m_pNetServer->Send(&Packet);
@@ -83,7 +82,7 @@ void CRegister::RegisterGotCount(CNetChunk *pChunk)
 
 	for(int i = 0; i < IMasterServer::MAX_MASTERSERVERS; i++)
 	{
-		if(net_addr_comp(&m_aMasterserverInfo[i].m_Addr, &pChunk->m_Address, true) == 0)
+		if(net_addr_comp(&m_aMasterserverInfo[i].m_Addr, &pChunk->m_Address) == 0)
 		{
 			m_aMasterserverInfo[i].m_Count = Count;
 			break;
@@ -91,11 +90,10 @@ void CRegister::RegisterGotCount(CNetChunk *pChunk)
 	}
 }
 
-void CRegister::Init(CNetServer *pNetServer, IEngineMasterServer *pMasterServer, CConfig *pConfig, IConsole *pConsole)
+void CRegister::Init(CNetServer *pNetServer, IEngineMasterServer *pMasterServer, IConsole *pConsole)
 {
 	m_pNetServer = pNetServer;
 	m_pMasterServer = pMasterServer;
-	m_pConfig = pConfig;
 	m_pConsole = pConsole;
 }
 
@@ -104,7 +102,7 @@ void CRegister::RegisterUpdate(int Nettype)
 	int64 Now = time_get();
 	int64 Freq = time_freq();
 
-	if(!m_pConfig->m_SvRegister)
+	if(!g_Config.m_SvRegister)
 		return;
 
 	m_pMasterServer->Update();
@@ -237,13 +235,17 @@ void CRegister::RegisterUpdate(int Nettype)
 	}
 }
 
-int CRegister::RegisterProcessPacket(CNetChunk *pPacket, TOKEN Token)
+int CRegister::RegisterProcessPacket(CNetChunk *pPacket)
 {
 	// check for masterserver address
 	bool Valid = false;
+	NETADDR Addr1 = pPacket->m_Address;
+	Addr1.port = 0;
 	for(int i = 0; i < IMasterServer::MAX_MASTERSERVERS; i++)
 	{
-		if(net_addr_comp(&pPacket->m_Address, &m_aMasterserverInfo[i].m_Addr, false) == 0)
+		NETADDR Addr2 = m_aMasterserverInfo[i].m_Addr;
+		Addr2.port = 0;
+		if(net_addr_comp(&Addr1, &Addr2) == 0)
 		{
 			Valid = true;
 			break;
@@ -255,16 +257,15 @@ int CRegister::RegisterProcessPacket(CNetChunk *pPacket, TOKEN Token)
 	if(pPacket->m_DataSize == sizeof(SERVERBROWSE_FWCHECK) &&
 		mem_comp(pPacket->m_pData, SERVERBROWSE_FWCHECK, sizeof(SERVERBROWSE_FWCHECK)) == 0)
 	{
-		RegisterSendFwcheckresponse(&pPacket->m_Address, Token);
+		RegisterSendFwcheckresponse(&pPacket->m_Address);
 		return 1;
 	}
 	else if(pPacket->m_DataSize == sizeof(SERVERBROWSE_FWOK) &&
 		mem_comp(pPacket->m_pData, SERVERBROWSE_FWOK, sizeof(SERVERBROWSE_FWOK)) == 0)
 	{
-		if(m_RegisterFirst && m_RegisterState != REGISTERSTATE_REGISTERED)
+		if(m_RegisterFirst)
 			m_pConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "register", "no firewall/nat problems detected");
 		RegisterNewState(REGISTERSTATE_REGISTERED);
-		m_pNetServer->AddToken(&pPacket->m_Address, Token);
 		return 1;
 	}
 	else if(pPacket->m_DataSize == sizeof(SERVERBROWSE_FWERROR) &&
@@ -272,7 +273,7 @@ int CRegister::RegisterProcessPacket(CNetChunk *pPacket, TOKEN Token)
 	{
 		m_pConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "register", "ERROR: the master server reports that clients can not connect to this server.");
 		char aBuf[256];
-		str_format(aBuf, sizeof(aBuf), "ERROR: configure your firewall/nat to let through udp on port %d.", m_pConfig->m_SvPort);
+		str_format(aBuf, sizeof(aBuf), "ERROR: configure your firewall/nat to let through udp on port %d.", g_Config.m_SvPort);
 		m_pConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, "register", aBuf);
 		RegisterNewState(REGISTERSTATE_ERROR);
 		return 1;

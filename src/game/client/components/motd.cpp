@@ -5,11 +5,10 @@
 #include <engine/textrender.h>
 #include <engine/keys.h>
 
-#include <generated/protocol.h>
-#include <generated/client_data.h>
+#include <game/generated/protocol.h>
+#include <game/generated/client_data.h>
 #include <game/client/gameclient.h>
 
-#include "menus.h"
 #include "motd.h"
 
 void CMotd::Clear()
@@ -19,9 +18,6 @@ void CMotd::Clear()
 
 bool CMotd::IsActive()
 {
-	// dont render modt if the menu is active
-	if(m_pClient->m_pMenus->IsActive())
-		return false;
 	return time_get() < m_ServerMotdTime;
 }
 
@@ -45,18 +41,15 @@ void CMotd::OnRender()
 	float w = 650.0f;
 	float x = Width/2 - w/2;
 	float y = 150.0f;
-	CUIRect Rect = {x, y, w, h};
 
 	Graphics()->BlendNormal();
-	RenderTools()->DrawRoundRect(&Rect, vec4(0.0f, 0.0f, 0.0f, 0.5f), 30.0f);
+	Graphics()->TextureSet(-1);
+	Graphics()->QuadsBegin();
+	Graphics()->SetColor(0,0,0,0.5f);
+	RenderTools()->DrawRoundRect(x, y, w, h, 40.0f);
+	Graphics()->QuadsEnd();
 
-	Rect.Margin(30.0f, &Rect);
-	float TextSize = 32.0f;
-	CTextCursor Cursor;
-	TextRender()->SetCursor(&Cursor, Rect.x, Rect.y, TextSize, TEXTFLAG_RENDER);
-	Cursor.m_LineWidth = Rect.w;
-	Cursor.m_MaxLines = ceil(Rect.h/TextSize);
-	TextRender()->TextEx(&Cursor, m_aServerMotd, -1);
+	TextRender()->Text(0, x+40.0f, y+40.0f, 32.0f, m_aServerMotd, (int)(w-80.0f));
 }
 
 void CMotd::OnMessage(int MsgType, void *pRawMsg)
@@ -83,8 +76,8 @@ void CMotd::OnMessage(int MsgType, void *pRawMsg)
 			}
 		}
 
-		if(m_aServerMotd[0] && Config()->m_ClMotdTime)
-			m_ServerMotdTime = time_get()+time_freq()*Config()->m_ClMotdTime;
+		if(m_aServerMotd[0] && g_Config.m_ClMotdTime)
+			m_ServerMotdTime = time_get()+time_freq()*g_Config.m_ClMotdTime;
 		else
 			m_ServerMotdTime = 0;
 	}

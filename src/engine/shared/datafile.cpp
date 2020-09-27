@@ -1,11 +1,9 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
-#include "datafile.h"
-
-#include <base/hash_ctxt.h>
 #include <base/math.h>
 #include <base/system.h>
 #include <engine/storage.h>
+#include "datafile.h"
 #include <zlib.h>
 
 static const int DEBUG=0;
@@ -60,13 +58,11 @@ struct CDatafileInfo
 struct CDatafile
 {
 	IOHANDLE m_File;
-	SHA256_DIGEST m_Sha256;
 	unsigned m_Crc;
 	CDatafileInfo m_Info;
 	CDatafileHeader m_Header;
 	int m_DataStartOffset;
 	char **m_ppDataPtrs;
-	int *m_pDataSizes;
 	char *m_pData;
 };
 
@@ -82,10 +78,8 @@ bool CDataFileReader::Open(class IStorage *pStorage, const char *pFilename, int 
 	}
 
 
-	// take the hashes of the file and store them
-	SHA256_CTX Sha256Ctx;
-	sha256_init(&Sha256Ctx);
-	unsigned Crc = crc32(0L, 0x0, 0);
+	// take the CRC of the file and store it
+	unsigned Crc = 0;
 	{
 		enum
 		{
@@ -97,14 +91,14 @@ bool CDataFileReader::Open(class IStorage *pStorage, const char *pFilename, int 
 		while(1)
 		{
 			unsigned Bytes = io_read(File, aBuffer, BUFFER_SIZE);
-			if(Bytes == 0)
+			if(Bytes <= 0)
 				break;
-			sha256_update(&Sha256Ctx, aBuffer, Bytes);
 			Crc = crc32(Crc, aBuffer, Bytes); // ignore_convention
 		}
 
 		io_seek(File, 0, IOSEEK_START);
 	}
+
 
 	// TODO: change this header
 	CDatafileHeader Header;
@@ -130,37 +124,27 @@ bool CDataFileReader::Open(class IStorage *pStorage, const char *pFilename, int 
 	}
 
 	// read in the rest except the data
-	int64 Size = 0;
+	unsigned Size = 0;
 	Size += Header.m_NumItemTypes*sizeof(CDatafileItemType);
 	Size += (Header.m_NumItems+Header.m_NumRawData)*sizeof(int);
 	if(Header.m_Version == 4)
 		Size += Header.m_NumRawData*sizeof(int); // v4 has uncompressed data sizes aswell
 	Size += Header.m_ItemSize;
 
-	int64 AllocSize = Size;
+	unsigned AllocSize = Size;
 	AllocSize += sizeof(CDatafile); // add space for info structure
 	AllocSize += Header.m_NumRawData*sizeof(void*); // add space for data pointers
-	AllocSize += Header.m_NumRawData*sizeof(int); // add space for data sizes
-	if(Size > (int64(1)<<31) || Header.m_NumItemTypes < 0 || Header.m_NumItems < 0 || Header.m_NumRawData < 0 || Header.m_ItemSize < 0)
-	{
-		io_close(File);
-		dbg_msg("datafile", "unable to load file, invalid file information");
-		return false;
-	}
 
 	CDatafile *pTmpDataFile = (CDatafile*)mem_alloc(AllocSize, 1);
 	pTmpDataFile->m_Header = Header;
 	pTmpDataFile->m_DataStartOffset = sizeof(CDatafileHeader) + Size;
-	pTmpDataFile->m_ppDataPtrs = (char **)(pTmpDataFile+1);
-	pTmpDataFile->m_pDataSizes = (int *)(pTmpDataFile->m_ppDataPtrs + Header.m_NumRawData);
-	pTmpDataFile->m_pData = (char *)(pTmpDataFile->m_pDataSizes + Header.m_NumRawData);
+	pTmpDataFile->m_ppDataPtrs = (char**)(pTmpDataFile+1);
+	pTmpDataFile->m_pData = (char *)(pTmpDataFile+1)+Header.m_NumRawData*sizeof(char *);
 	pTmpDataFile->m_File = File;
-	pTmpDataFile->m_Sha256 = sha256_finish(&Sha256Ctx);
 	pTmpDataFile->m_Crc = Crc;
 
-	// clear the data pointers and sizes
+	// clear the data pointers
 	mem_zero(pTmpDataFile->m_ppDataPtrs, Header.m_NumRawData*sizeof(void*));
-	mem_zero(pTmpDataFile->m_pDataSizes, Header.m_NumRawData*sizeof(int));
 
 	// read types, offsets, sizes and item data
 	unsigned ReadSize = io_read(File, pTmpDataFile->m_pData, Size);
@@ -169,7 +153,7 @@ bool CDataFileReader::Open(class IStorage *pStorage, const char *pFilename, int 
 		io_close(pTmpDataFile->m_File);
 		mem_free(pTmpDataFile);
 		pTmpDataFile = 0;
-		dbg_msg("datafile", "couldn't load the whole thing, wanted=%d got=%d", unsigned(Size), ReadSize);
+		dbg_msg("datafile", "couldn't load the whole thing, wanted=%d got=%d", Size, ReadSize);
 		return false;
 	}
 
@@ -177,12 +161,12 @@ bool CDataFileReader::Open(class IStorage *pStorage, const char *pFilename, int 
 	m_pDataFile = pTmpDataFile;
 
 #if defined(CONF_ARCH_ENDIAN_BIG)
-	swap_endian(m_pDataFile->m_pData, sizeof(int), min(static_cast<unsigned>(Header.m_Swaplen), static_cast<unsigned>(Size)) / sizeof(int));
+	swap_endian(m_pDataFile->m_pData, sizeof(int), min(static_cast<unsigned>(Header.m_Swaplen), Size) / sizeof(int));
 #endif
 
 	//if(DEBUG)
 	{
-		dbg_msg("datafile", "allocsize=%d", unsigned(AllocSize));
+		dbg_msg("datafile", "allocsize=%d", AllocSize);
 		dbg_msg("datafile", "readsize=%d", ReadSize);
 		dbg_msg("datafile", "swaplen=%d", Header.m_Swaplen);
 		dbg_msg("datafile", "item_size=%d", m_pDataFile->m_Header.m_ItemSize);
@@ -240,13 +224,40 @@ bool CDataFileReader::Open(class IStorage *pStorage, const char *pFilename, int 
 	return true;
 }
 
-int CDataFileReader::NumData() const
+bool CDataFileReader::GetCrcSize(class IStorage *pStorage, const char *pFilename, int StorageType, unsigned *pCrc, unsigned *pSize)
+{
+	IOHANDLE File = pStorage->OpenFile(pFilename, IOFLAG_READ, StorageType);
+	if(!File)
+		return false;
+
+	// get crc and size
+	unsigned Crc = 0;
+	unsigned Size = 0;
+	unsigned char aBuffer[64*1024];
+	while(1)
+	{
+		unsigned Bytes = io_read(File, aBuffer, sizeof(aBuffer));
+		if(Bytes <= 0)
+			break;
+		Crc = crc32(Crc, aBuffer, Bytes); // ignore_convention
+		Size += Bytes;
+	}
+
+	io_close(File);
+
+	*pCrc = Crc;
+	*pSize = Size;
+	return true;
+}
+
+int CDataFileReader::NumData()
 {
 	if(!m_pDataFile) { return 0; }
 	return m_pDataFile->m_Header.m_NumRawData;
 }
 
-int CDataFileReader::GetFileDataSize(int Index) const
+// always returns the size in the file
+int CDataFileReader::GetDataSize(int Index)
 {
 	if(!m_pDataFile) { return 0; }
 
@@ -255,39 +266,25 @@ int CDataFileReader::GetFileDataSize(int Index) const
 	return m_pDataFile->m_Info.m_pDataOffsets[Index+1]-m_pDataFile->m_Info.m_pDataOffsets[Index];
 }
 
-int CDataFileReader::GetDataSize(int Index) const
+int CDataFileReader::GetUncompressedDataSize(int Index)
 {
-	if(Index < 0 || Index >= m_pDataFile->m_Header.m_NumRawData)
-	{
-		return 0;
-	}
+	if(!m_pDataFile) { return 0; }
 
-	if(!m_pDataFile->m_ppDataPtrs[Index])
-	{
-		if(m_pDataFile->m_Header.m_Version >= 4)
-		{
-			return m_pDataFile->m_Info.m_pDataSizes[Index];
-		}
-		else
-		{
-			return GetFileDataSize(Index);
-		}
-	}
-	return m_pDataFile->m_pDataSizes[Index];
+	if(m_pDataFile->m_Header.m_Version == 4)
+		return m_pDataFile->m_Info.m_pDataSizes[Index];
+	else
+		return GetDataSize(Index);
 }
 
 void *CDataFileReader::GetDataImpl(int Index, int Swap)
 {
 	if(!m_pDataFile) { return 0; }
 
-	if(Index < 0 || Index >= m_pDataFile->m_Header.m_NumRawData)
-		return 0;
-
 	// load it if needed
 	if(!m_pDataFile->m_ppDataPtrs[Index])
 	{
 		// fetch the data size
-		int DataSize = GetFileDataSize(Index);
+		int DataSize = GetDataSize(Index);
 #if defined(CONF_ARCH_ENDIAN_BIG)
 		int SwapSize = DataSize;
 #endif
@@ -301,7 +298,6 @@ void *CDataFileReader::GetDataImpl(int Index, int Swap)
 
 			dbg_msg("datafile", "loading data index=%d size=%d uncompressed=%lu", Index, DataSize, UncompressedSize);
 			m_pDataFile->m_ppDataPtrs[Index] = (char *)mem_alloc(UncompressedSize, 1);
-			m_pDataFile->m_pDataSizes[Index] = UncompressedSize;
 
 			// read the compressed data
 			io_seek(m_pDataFile->m_File, m_pDataFile->m_DataStartOffset+m_pDataFile->m_Info.m_pDataOffsets[Index], IOSEEK_START);
@@ -322,7 +318,6 @@ void *CDataFileReader::GetDataImpl(int Index, int Swap)
 			// load the data
 			dbg_msg("datafile", "loading data index=%d size=%d", Index, DataSize);
 			m_pDataFile->m_ppDataPtrs[Index] = (char *)mem_alloc(DataSize, 1);
-			m_pDataFile->m_pDataSizes[Index] = DataSize;
 			io_seek(m_pDataFile->m_File, m_pDataFile->m_DataStartOffset+m_pDataFile->m_Info.m_pDataOffsets[Index], IOSEEK_START);
 			io_read(m_pDataFile->m_File, m_pDataFile->m_ppDataPtrs[Index], DataSize);
 		}
@@ -346,30 +341,17 @@ void *CDataFileReader::GetDataSwapped(int Index)
 	return GetDataImpl(Index, 1);
 }
 
-void CDataFileReader::ReplaceData(int Index, char *pData, int Size)
-{
-	if(Index < 0 || Index >= m_pDataFile->m_Header.m_NumRawData)
-		return;
-
-	// make sure the data has been loaded
-	GetDataImpl(Index, 0);
-
-	UnloadData(Index);
-	m_pDataFile->m_ppDataPtrs[Index] = pData;
-	m_pDataFile->m_pDataSizes[Index] = Size;
-}
-
 void CDataFileReader::UnloadData(int Index)
 {
-	if(Index < 0 || Index >= m_pDataFile->m_Header.m_NumRawData)
+	if(Index < 0)
 		return;
 
+	//
 	mem_free(m_pDataFile->m_ppDataPtrs[Index]);
 	m_pDataFile->m_ppDataPtrs[Index] = 0x0;
-	m_pDataFile->m_pDataSizes[Index] = 0;
 }
 
-int CDataFileReader::GetFileItemSize(int Index) const
+int CDataFileReader::GetItemSize(int Index)
 {
 	if(!m_pDataFile) { return 0; }
 	if(Index == m_pDataFile->m_Header.m_NumItems-1)
@@ -377,27 +359,9 @@ int CDataFileReader::GetFileItemSize(int Index) const
 	return m_pDataFile->m_Info.m_pItemOffsets[Index+1]-m_pDataFile->m_Info.m_pItemOffsets[Index];
 }
 
-int CDataFileReader::GetItemSize(int Index) const
-{
-	int FileSize = GetFileItemSize(Index);
-	if(FileSize == 0)
-	{
-		return 0;
-	}
-	return FileSize - sizeof(CDatafileItem);
-}
-
 void *CDataFileReader::GetItem(int Index, int *pType, int *pID)
 {
-	if(!m_pDataFile || Index < 0 || Index >= m_pDataFile->m_Header.m_NumItems)
-	{
-		if(pType)
-			*pType = 0;
-		if(pID)
-			*pID = 0;
-
-		return 0;
-	}
+	if(!m_pDataFile) { if(pType) *pType = 0; if(pID) *pID = 0; return 0; }
 
 	CDatafileItem *i = (CDatafileItem *)(m_pDataFile->m_Info.m_pItemStart+m_pDataFile->m_Info.m_pItemOffsets[Index]);
 	if(pType)
@@ -442,7 +406,7 @@ void *CDataFileReader::FindItem(int Type, int ID)
 	return 0;
 }
 
-int CDataFileReader::NumItems() const
+int CDataFileReader::NumItems()
 {
 	if(!m_pDataFile) return 0;
 	return m_pDataFile->m_Header.m_NumItems;
@@ -456,10 +420,7 @@ bool CDataFileReader::Close()
 	// free the data that is loaded
 	int i;
 	for(i = 0; i < m_pDataFile->m_Header.m_NumRawData; i++)
-	{
 		mem_free(m_pDataFile->m_ppDataPtrs[i]);
-		m_pDataFile->m_pDataSizes[i] = 0;
-	}
 
 	io_close(m_pDataFile->m_File);
 	mem_free(m_pDataFile);
@@ -467,37 +428,10 @@ bool CDataFileReader::Close()
 	return true;
 }
 
-SHA256_DIGEST CDataFileReader::Sha256() const
-{
-	if(!m_pDataFile) return SHA256_ZEROED;
-	return m_pDataFile->m_Sha256;
-}
-
-unsigned CDataFileReader::Crc() const
+unsigned CDataFileReader::Crc()
 {
 	if(!m_pDataFile) return 0xFFFFFFFF;
 	return m_pDataFile->m_Crc;
-}
-
-bool CDataFileReader::CheckSha256(IOHANDLE Handle, const void *pSha256)
-{
-	// read the hash of the file
-	SHA256_CTX Sha256Ctx;
-	sha256_init(&Sha256Ctx);
-	unsigned char aBuffer[64*1024];
-	
-	while(1)
-	{
-		unsigned Bytes = io_read(Handle, aBuffer, sizeof(aBuffer));
-		if(Bytes == 0)
-			break;
-		sha256_update(&Sha256Ctx, aBuffer, Bytes);
-	}
-
-	io_seek(Handle, 0, IOSEEK_START);
-	SHA256_DIGEST Sha256 = sha256_finish(&Sha256Ctx);
-
-	return !sha256_comp(*(const SHA256_DIGEST *)pSha256, Sha256);
 }
 
 
@@ -540,7 +474,7 @@ bool CDataFileWriter::Open(class IStorage *pStorage, const char *pFilename)
 	return true;
 }
 
-int CDataFileWriter::AddItem(int Type, int ID, int Size, const void *pData)
+int CDataFileWriter::AddItem(int Type, int ID, int Size, void *pData)
 {
 	if(!m_File) return 0;
 
@@ -576,7 +510,7 @@ int CDataFileWriter::AddItem(int Type, int ID, int Size, const void *pData)
 	return m_NumItems-1;
 }
 
-int CDataFileWriter::AddData(int Size, const void *pData)
+int CDataFileWriter::AddData(int Size, void *pData)
 {
 	if(!m_File) return 0;
 
@@ -603,7 +537,7 @@ int CDataFileWriter::AddData(int Size, const void *pData)
 	return m_NumDatas-1;
 }
 
-int CDataFileWriter::AddDataSwapped(int Size, const void *pData)
+int CDataFileWriter::AddDataSwapped(int Size, void *pData)
 {
 	dbg_assert(Size%sizeof(int) == 0, "incorrect boundary");
 
@@ -622,7 +556,7 @@ int CDataFileWriter::AddDataSwapped(int Size, const void *pData)
 
 int CDataFileWriter::Finish()
 {
-	if(!m_File) return 0;
+	if(!m_File) return 1;
 
 	int ItemSize = 0;
 	int TypesSize, HeaderSize, OffsetSize, FileSize, SwapSize;
@@ -637,7 +571,7 @@ int CDataFileWriter::Finish()
 	for(int i = 0; i < m_NumItems; i++)
 	{
 		if(DEBUG)
-			dbg_msg("datafile", "item=%d size=%d (%d)", i, m_pItems[i].m_Size, (int)(m_pItems[i].m_Size+sizeof(CDatafileItem)));
+			dbg_msg("datafile", "item=%d size=%d (%d)", i, m_pItems[i].m_Size, m_pItems[i].m_Size+(int)sizeof(CDatafileItem));
 		ItemSize += m_pItems[i].m_Size + sizeof(CDatafileItem);
 	}
 
@@ -797,5 +731,5 @@ int CDataFileWriter::Finish()
 
 	if(DEBUG)
 		dbg_msg("datafile", "done");
-	return 1;
+	return 0;
 }

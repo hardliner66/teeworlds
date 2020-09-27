@@ -1,35 +1,32 @@
-CheckVersion("0.5")
+if _VERSION == "Lua 5.1" then
+	CheckVersion("0.4")
+else
+	CheckVersion("0.5")
+end
 
 Import("configure.lua")
 Import("other/sdl/sdl.lua")
 Import("other/freetype/freetype.lua")
+Import("other/curl/curl.lua")
+Import("other/mysql/mysql.lua")
 
 --- Setup Config -------
 config = NewConfig()
 config:Add(OptCCompiler("compiler"))
 config:Add(OptTestCompileC("stackprotector", "int main(){return 0;}", "-fstack-protector -fstack-protector-all"))
-config:Add(OptTestCompileC("minmacosxsdk", "int main(){return 0;}", "-mmacosx-version-min=10.7 -isysroot /Developer/SDKs/MacOSX10.7.sdk"))
-config:Add(OptTestCompileC("buildwithoutsseflag", "#include <immintrin.h>\nint main(){_mm_pause();return 0;}", ""))
+config:Add(OptTestCompileC("minmacosxsdk", "int main(){return 0;}", "-mmacosx-version-min=10.5 -isysroot /Developer/SDKs/MacOSX10.5.sdk"))
+config:Add(OptTestCompileC("macosxppc", "int main(){return 0;}", "-arch ppc"))
 config:Add(OptLibrary("zlib", "zlib.h", false))
 config:Add(SDL.OptFind("sdl", true))
 config:Add(FreeType.OptFind("freetype", true))
+config:Add(Curl.OptFind("curl", true))
+config:Add(MySQL.OptFind("mysql", false))
 config:Finalize("config.lua")
 
-generated_src_dir = "build/src"
-generated_icon_dir = "build/icons"
-builddir = "build/%(arch)s/%(conf)s"
-content_src_dir = "datasrc/"
-
-python_in_path = ExecuteSilent("python -V") == 0
-
 -- data compiler
-function Python(name)
+function Script(name)
 	if family == "windows" then
-		name = str_replace(name, "/", "\\")
-		if not python_in_path then
-			-- Python is usually registered for .py files in Windows
-			return name
-		end
+		return str_replace(name, "/", "\\")
 	end
 	return "python " .. name
 end
@@ -37,10 +34,10 @@ end
 function CHash(output, ...)
 	local inputs = TableFlatten({...})
 
-	output = PathJoin(generated_src_dir, Path(output))
+	output = Path(output)
 
 	-- compile all the files
-	local cmd = Python("scripts/cmd5.py") .. " "
+	local cmd = Script("scripts/cmd5.py") .. " "
 	for index, inname in ipairs(inputs) do
 		cmd = cmd .. Path(inname) .. " "
 	end
@@ -55,491 +52,650 @@ function CHash(output, ...)
 	return output
 end
 
-function ResCompile(scriptfile, compiler)
+--[[
+function DuplicateDirectoryStructure(orgpath, srcpath, dstpath)
+	for _,v in pairs(CollectDirs(srcpath .. "/")) do
+		MakeDirectory(dstpath .. "/" .. string.sub(v, string.len(orgpath)+2))
+		DuplicateDirectoryStructure(orgpath, v, dstpath)
+	end
+end
+
+DuplicateDirectoryStructure("src", "src", "objs")
+]]
+
+function ResCompile(scriptfile)
 	scriptfile = Path(scriptfile)
-	local output = nil
-	if compiler == "cl" then
-		output = PathJoin(generated_icon_dir, PathBase(PathFilename(scriptfile)) .. ".res")
+	if config.compiler.driver == "cl" then
+		output = PathBase(scriptfile) .. ".res"
 		AddJob(output, "rc " .. scriptfile, "rc /fo " .. output .. " " .. scriptfile)
-	elseif compiler == "gcc" or compiler == "clang" then
-		output = PathJoin(generated_icon_dir, PathBase(PathFilename(scriptfile)) .. ".coff")
+	elseif config.compiler.driver == "gcc" then
+		output = PathBase(scriptfile) .. ".coff"
 		AddJob(output, "windres " .. scriptfile, "windres -i " .. scriptfile .. " -o " .. output)
 	end
 	AddDependency(output, scriptfile)
 	return output
 end
 
+function Dat2c(datafile, sourcefile, arrayname)
+	datafile = Path(datafile)
+	sourcefile = Path(sourcefile)
+
+	AddJob(
+		sourcefile,
+		"dat2c " .. PathFilename(sourcefile) .. " = " .. PathFilename(datafile),
+		Script("scripts/dat2c.py").. "\" " .. sourcefile .. " " .. datafile .. " " .. arrayname
+	)
+	AddDependency(sourcefile, datafile)
+	return sourcefile
+end
+
 function ContentCompile(action, output)
-	output = PathJoin(generated_src_dir, Path(output))
+	output = Path(output)
 	AddJob(
 		output,
 		action .. " > " .. output,
-		Python("datasrc/compile.py") .. " " .. action .. " > " .. output
+		--Script("datasrc/compile.py") .. "\" ".. Path(output) .. " " .. action
+		Script("datasrc/compile.py") .. " " .. action .. " > " .. Path(output)
 	)
-	AddDependency(output, "datasrc/compile.py")
-	AddDependency("datasrc/compile.py", "datasrc/content.py", "datasrc/network.py", "datasrc/datatypes.py")
+	AddDependency(output, Path("datasrc/content.py")) -- do this more proper
+	AddDependency(output, Path("datasrc/network.py"))
+	AddDependency(output, Path("datasrc/compile.py"))
+	AddDependency(output, Path("datasrc/datatypes.py"))
 	return output
 end
 
+-- Content Compile
+network_source = ContentCompile("network_source", "src/game/generated/protocol.cpp")
+network_header = ContentCompile("network_header", "src/game/generated/protocol.h")
+client_content_source = ContentCompile("client_content_source", "src/game/generated/client_data.cpp")
+client_content_header = ContentCompile("client_content_header", "src/game/generated/client_data.h")
+server_content_source = ContentCompile("server_content_source", "src/game/generated/server_data.cpp")
+server_content_header = ContentCompile("server_content_header", "src/game/generated/server_data.h")
 
-function GenerateCommonSettings(settings, conf, arch, compiler)
-	if compiler == "gcc" or compiler == "clang" then
-		settings.cc.flags:Add("-Wall", "-fno-exceptions")
+AddDependency(network_source, network_header)
+AddDependency(client_content_source, client_content_header)
+AddDependency(server_content_source, server_content_header)
+
+nethash = CHash("src/game/generated/nethash.cpp", "src/engine/shared/protocol.h", "src/game/generated/protocol.h", "src/game/tuning.h", "src/game/gamecore.cpp")
+
+client_link_other = {}
+client_depends = {}
+shared_depends = {}
+server_link_other = {}
+server_sql_depends = {}
+
+if family == "windows" then
+	if platform == "win32" then
+		table.insert(client_depends, CopyToDirectory(".", "other\\freetype\\windows\\lib32\\freetype.dll"))
+		table.insert(client_depends, CopyToDirectory(".", "other\\sdl\\windows\\lib32\\SDL.dll"))
+		table.insert(shared_depends, CopyToDirectory(".", "other\\curl\\windows\\lib32\\libcurl.dll"))
+		table.insert(server_sql_depends, CopyToDirectory(".", "other\\mysql\\windows\\lib32\\libmariadb.dll"))
+	else
+		table.insert(client_depends, CopyToDirectory(".", "other\\freetype\\windows\\lib64\\freetype.dll"))
+		table.insert(client_depends, CopyToDirectory(".", "other\\sdl\\windows\\lib64\\SDL.dll"))
+		table.insert(shared_depends, CopyToDirectory(".", "other\\curl\\windows\\lib64\\libcurl.dll"))
+		table.insert(server_sql_depends, CopyToDirectory(".", "other\\mysql\\windows\\lib64\\libmariadb.dll"))
 	end
 
-	-- Compile zlib if needed
-	local zlib = nil
-	if config.zlib.value == 1 then
+	if config.compiler.driver == "cl" then
+		client_link_other = {ResCompile("other/icons/teeworlds_cl.rc")}
+		server_link_other = {ResCompile("other/icons/teeworlds_srv_cl.rc")}
+	elseif config.compiler.driver == "gcc" then
+		client_link_other = {ResCompile("other/icons/teeworlds_gcc.rc")}
+		server_link_other = {ResCompile("other/icons/teeworlds_srv_gcc.rc")}
+	end
+end
+
+function Intermediate_Output(settings, input)
+	return "objs/" .. string.sub(PathBase(input), string.len("src/")+1) .. settings.config_ext
+end
+
+function build(settings)
+	-- apply compiler settings
+	config.compiler:Apply(settings)
+	
+	--settings.objdir = Path("objs")
+	settings.cc.Output = Intermediate_Output
+	
+	cflags = os.getenv("CFLAGS")
+	if cflags then
+		settings.cc.flags:Add(cflags)
+	end
+	ldflags = os.getenv("LDFLAGS")
+	if ldflags then
+		settings.link.flags:Add(ldflags)
+	end
+
+	if config.compiler.driver == "cl" then
+		settings.cc.flags:Add("/wd4244", "/wd4577")
+	else
+		settings.cc.flags:Add("-Wall", "-fno-exceptions", "-Wextra", "-Wno-unused-parameter", "-Wno-missing-field-initializers", "-Wformat=2")
+		if family == "windows" then
+			-- disable visibility attribute support for gcc on windows
+			settings.cc.defines:Add("NO_VIZ")
+		elseif platform == "macosx" then
+			settings.cc.flags:Add("-mmacosx-version-min=10.5")
+			settings.link.flags:Add("-mmacosx-version-min=10.5")
+			if config.minmacosxsdk.value then
+				settings.cc.flags:Add("-isysroot /Developer/SDKs/MacOSX10.5.sdk")
+				settings.link.flags:Add("-isysroot /Developer/SDKs/MacOSX10.5.sdk")
+			end
+		elseif config.stackprotector.value then
+			settings.cc.flags:Add("-fstack-protector", "-fstack-protector-all")
+			settings.link.flags:Add("-fstack-protector", "-fstack-protector-all")
+		end
+	end
+
+	-- set some platform specific settings
+	settings.cc.includes:Add("src")
+	settings.cc.includes:Add("src/engine/external/wavpack")
+
+	if family == "unix" then
+		if platform == "macosx" then
+			settings.link.frameworks:Add("Carbon")
+			settings.link.frameworks:Add("AppKit")
+		else
+			settings.link.libs:Add("pthread")
+		end
+		
+		if platform == "solaris" then
+		    settings.link.flags:Add("-lsocket")
+		    settings.link.flags:Add("-lnsl")
+		end
+	elseif family == "windows" then
+		settings.link.libs:Add("gdi32")
+		settings.link.libs:Add("user32")
+		settings.link.libs:Add("ws2_32")
+		settings.link.libs:Add("ole32")
+		settings.link.libs:Add("shell32")
+		settings.link.libs:Add("advapi32")
+	end
+
+	-- compile zlib if needed
+	if config.zlib.value then
 		settings.link.libs:Add("z")
 		if config.zlib.include_path then
 			settings.cc.includes:Add(config.zlib.include_path)
 		end
+		zlib = {}
 	else
-		settings.cc.includes:Add("src/engine/external/zlib")
 		zlib = Compile(settings, Collect("src/engine/external/zlib/*.c"))
+		settings.cc.includes:Add("src/engine/external/zlib")
 	end
 
-	local md5 = Compile(settings, Collect("src/engine/external/md5/*.c"))
-	local wavpack = Compile(settings, Collect("src/engine/external/wavpack/*.c"))
-	local png = Compile(settings, Collect("src/engine/external/pnglite/*.c"))
-	local json = Compile(settings, Collect("src/engine/external/json-parser/*.c"))
+	-- build the small libraries
+	wavpack = Compile(settings, Collect("src/engine/external/wavpack/*.c"))
+	pnglite = Compile(settings, Collect("src/engine/external/pnglite/*.c"))
+	md5 = Compile(settings, Collect("src/engine/external/md5/*.c"))
+	jsonparser = Compile(settings, Collect("src/engine/external/json-parser/*.c"))
 
-	-- globally available libs
-	libs = {zlib=zlib, wavpack=wavpack, png=png, md5=md5, json=json}
-end
+	-- apply curl settings
+	config.curl:Apply(settings)
 
-function GenerateMacOSXSettings(settings, conf, arch, compiler)
-	if arch == "x86" then
-		settings.cc.flags:Add("-arch i386")
-		settings.link.flags:Add("-arch i386")
-	elseif arch == "x86_64" then
-		settings.cc.flags:Add("-arch x86_64")
-		settings.link.flags:Add("-arch x86_64")
-	elseif arch == "ppc" then
-		settings.cc.flags:Add("-arch ppc")
-		settings.link.flags:Add("-arch ppc")
-	elseif arch == "ppc64" then
-		settings.cc.flags:Add("-arch ppc64")
-		settings.link.flags:Add("-arch ppc64")
-	else
-		print("Unknown Architecture '" .. arch .. "'. Supported: x86, x86_64, ppc, ppc64")
-		os.exit(1)
-	end
+	-- build game components
+	engine_settings = settings:Copy()
+	server_settings = engine_settings:Copy()
+	client_settings = engine_settings:Copy()
+	launcher_settings = engine_settings:Copy()
 
-	-- c++ stdlib needed
-	settings.cc.flags:Add("--stdlib=libc++")
-	settings.link.flags:Add("--stdlib=libc++")
-	-- this also needs the macOS min SDK version to be at least 10.7
-
-	settings.cc.flags:Add("-mmacosx-version-min=10.7")
-	settings.link.flags:Add("-mmacosx-version-min=10.7")
-
-	if config.minmacosxsdk.value == 1 then
-		settings.cc.flags:Add("-isysroot /Developer/SDKs/MacOSX10.7.sdk")
-		settings.link.flags:Add("-isysroot /Developer/SDKs/MacOSX10.7.sdk")
-	end
-
-	settings.link.frameworks:Add("Carbon")
-	settings.link.frameworks:Add("AppKit")
-
-	GenerateCommonSettings(settings, conf, arch, compiler)
-
-	-- Build server launcher before adding game stuff
-	local serverlaunch = Link(settings, "serverlaunch", Compile(settings, "src/osxlaunch/server.m"))
-
-	-- Master server, version server and tools
-	BuildEngineCommon(settings)
-	BuildMasterserver(settings)
-	BuildVersionserver(settings)
-	BuildTools(settings)
-
-	-- Add requirements for Server & Client
-	BuildGameCommon(settings)
-
-	-- Server
-	settings.link.frameworks:Add("Cocoa")
-	local server_exe = BuildServer(settings)
-	AddDependency(server_exe, serverlaunch)
-
-	-- Client
-	settings.link.frameworks:Add("OpenGL")
-	settings.link.frameworks:Add("AGL")
-	-- FIXME: the SDL config is applied in BuildClient too but is needed here before so the launcher will compile
-	config.sdl:Apply(settings)
-	settings.link.extrafiles:Merge(Compile(settings, "src/osxlaunch/client.m"))
-	BuildClient(settings)
-
-	-- Content
-	BuildContent(settings, arch, conf)
-end
-
-function GenerateLinuxSettings(settings, conf, arch, compiler)
-	if arch == "x86" then
-		if config.buildwithoutsseflag.value == false then
-			settings.cc.flags:Add("-msse2") -- for the _mm_pause call
-		end
-		settings.cc.flags:Add("-m32")
-		settings.link.flags:Add("-m32")
-	elseif arch == "x86_64" then
-		settings.cc.flags:Add("-m64")
-		settings.link.flags:Add("-m64")
-	elseif arch == "armv7l" then
-		-- arm 32 bit
-	else
-		print("Unknown Architecture '" .. arch .. "'. Supported: x86, x86_64")
-		os.exit(1)
-	end
-	settings.link.libs:Add("pthread")
-
-	GenerateCommonSettings(settings, conf, arch, compiler)
-
-	-- Master server, version server and tools
-	BuildEngineCommon(settings)
-	BuildTools(settings)
-	BuildMasterserver(settings)
-	BuildVersionserver(settings)
-
-	-- Add requirements for Server & Client
-	BuildGameCommon(settings)
-
-	-- Server
-	BuildServer(settings)
-
-	-- Client
-	settings.link.libs:Add("X11")
-	settings.link.libs:Add("GL")
-	BuildClient(settings)
-
-	-- Content
-	BuildContent(settings, arch, conf)
-end
-
-function GenerateSolarisSettings(settings, conf, arch, compiler)
-	settings.link.libs:Add("socket")
-	settings.link.libs:Add("nsl")
-
-	GenerateLinuxSettings(settings, conf, arch, compiler)
-end
-
-function GenerateWindowsSettings(settings, conf, target_arch, compiler)
-	if compiler == "cl" then
-		if (target_arch == "x86" and arch ~= "ia32") or
-		   (target_arch == "x86_64" and arch ~= "ia64" and arch ~= "amd64") then
-			print("Cross compiling is unsupported on Windows.")
-			os.exit(1)
-		end
-		settings.cc.flags:Add("/wd4244", "/wd4577")
-	elseif compiler == "gcc" or config.compiler.driver == "clang" then
-		if target_arch ~= "x86" and target_arch ~= "x86_64" then
-			print("Unknown Architecture '" .. arch .. "'. Supported: x86, x86_64")
-			os.exit(1)
-		end
-
-		-- disable visibility attribute support for gcc on windows
-		settings.cc.defines:Add("NO_VIZ")
-		settings.cc.defines:Add("_WIN32_WINNT=0x0501")
-	end
-
-	local icons = SharedIcons(compiler)
-	local manifests = SharedManifests(compiler)
-
-	-- Required libs
-	settings.link.libs:Add("gdi32")
-	settings.link.libs:Add("user32")
-	settings.link.libs:Add("ws2_32")
-	settings.link.libs:Add("ole32")
-	settings.link.libs:Add("shell32")
-	settings.link.libs:Add("advapi32")
-
-	GenerateCommonSettings(settings, conf, target_arch, compiler)
-
-	-- Master server, version server and tools
-	BuildEngineCommon(settings)
-	BuildMasterserver(settings)
-	BuildVersionserver(settings)
-	BuildTools(settings)
-
-	-- Add requirements for Server & Client
-	BuildGameCommon(settings)
-
-	-- Server
-	local server_settings = settings:Copy()
-	server_settings.link.extrafiles:Add(icons.server)
-	BuildServer(server_settings)
-
-	-- Client
-	settings.link.extrafiles:Add(icons.client)
-	settings.link.extrafiles:Add(manifests.client)
-	settings.link.libs:Add("opengl32")
-	settings.link.libs:Add("winmm")
-	BuildClient(settings)
-
-	-- Content
-	BuildContent(settings, target_arch, conf)
-end
-
-function SharedCommonFiles()
-	-- Shared game files, generate only once
-
-	if not shared_common_files then
-		local network_source = ContentCompile("network_source", "generated/protocol.cpp")
-		local network_header = ContentCompile("network_header", "generated/protocol.h")
-		AddDependency(network_source, network_header, "src/engine/shared/protocol.h")
-
-		local nethash = CHash("generated/nethash.cpp", "src/engine/shared/protocol.h", "src/game/tuning.h", "src/game/gamecore.cpp", network_header)
-		shared_common_files = {network_source, nethash}
-	end
-
-	return shared_common_files
-end
-
-function SharedServerFiles()
-	-- Shared server files, generate only once
-
-	if not shared_server_files then
-		local server_content_source = ContentCompile("server_content_source", "generated/server_data.cpp")
-		local server_content_header = ContentCompile("server_content_header", "generated/server_data.h")
-		AddDependency(server_content_source, server_content_header)
-		shared_server_files = {server_content_source}
-	end
-
-	return shared_server_files
-end
-
-function SharedClientFiles()
-	-- Shared client files, generate only once
-
-	if not shared_client_files then
-		local client_content_source = ContentCompile("client_content_source", "generated/client_data.cpp")
-		local client_content_header = ContentCompile("client_content_header", "generated/client_data.h")
-		AddDependency(client_content_source, client_content_header)
-		shared_client_files = {client_content_source}
-	end
-
-	return shared_client_files
-end
-
-shared_icons = {}
-function SharedIcons(compiler)
-	if not shared_icons[compiler] then
-		local server_icon = ResCompile("other/icons/teeworlds_srv_" .. compiler .. ".rc", compiler)
-		local client_icon = ResCompile("other/icons/teeworlds_" .. compiler .. ".rc", compiler)
-		shared_icons[compiler] = {server=server_icon, client=client_icon}
-	end
-	return shared_icons[compiler]
-end
-
-function SharedManifests(compiler)
-	if not shared_manifests then
-		local client_manifest = ResCompile("other/manifest/teeworlds.rc", compiler)
-		shared_manifests = {client=client_manifest}
-	end
-	return shared_manifests
-end
-
-function BuildEngineCommon(settings)
-	settings.link.extrafiles:Merge(Compile(settings, Collect("src/engine/shared/*.cpp", "src/base/*.c")))
-end
-
-function BuildGameCommon(settings)
-	settings.link.extrafiles:Merge(Compile(settings, Collect("src/game/*.cpp"), SharedCommonFiles()))
-end
-
-
-function BuildClient(settings, family, platform)
-	config.sdl:Apply(settings)
-	config.freetype:Apply(settings)
-	
-	local client = Compile(settings, Collect("src/engine/client/*.cpp"))
-	
-	local game_client = Compile(settings, CollectRecursive("src/game/client/*.cpp"), SharedClientFiles())
-	local game_editor = Compile(settings, Collect("src/game/editor/*.cpp"))
-	
-	Link(settings, "teeworlds", libs["zlib"], libs["md5"], libs["wavpack"], libs["png"], libs["json"], client, game_client, game_editor)
-end
-
-function BuildServer(settings, family, platform)
-	local server = Compile(settings, Collect("src/engine/server/*.cpp"))
-	
-	local game_server = Compile(settings, CollectRecursive("src/game/server/*.cpp"), SharedServerFiles())
-	
-	return Link(settings, "teeworlds_srv", libs["zlib"], libs["md5"], server, game_server)
-end
-
-function BuildTools(settings)
-	local tools = {}
-	for i,v in ipairs(Collect("src/tools/*.cpp", "src/tools/*.c")) do
-		local toolname = PathFilename(PathBase(v))
-		tools[i] = Link(settings, toolname, Compile(settings, v), libs["zlib"], libs["md5"], libs["wavpack"], libs["png"])
-	end
-	PseudoTarget(settings.link.Output(settings, "pseudo_tools") .. settings.link.extension, tools)
-end
-
-function BuildMasterserver(settings)
-	return Link(settings, "mastersrv", Compile(settings, Collect("src/mastersrv/*.cpp")), libs["zlib"], libs["md5"])
-end
-
-function BuildVersionserver(settings)
-	return Link(settings, "versionsrv", Compile(settings, Collect("src/versionsrv/*.cpp")), libs["zlib"], libs["md5"])
-end
-
-function BuildContent(settings, arch, conf)
-	local content = {}
-	table.insert(content, CopyToDir(settings.link.Output(settings, "data"), CollectRecursive(content_src_dir .. "*.png", content_src_dir .. "*.wv", content_src_dir .. "*.ttf", content_src_dir .. "*.txt", content_src_dir .. "*.map", content_src_dir .. "*.rules", content_src_dir .. "*.json")))
-	if family == "windows" then
-		if arch == "x86_64" then
-			_arch = "64"
-		else
-			_arch = "32"
-		end
-		-- dependencies
-		dl = Python("scripts/download.py")
-		AddJob({
-				"other/freetype/include/ft2build.h", "other/freetype/windows/lib" .. _arch .. "/freetype.dll",
-				"other/sdl/include/SDL.h", "other/sdl/windows/lib" .. _arch .. "/SDL2.dll"
-			}, "Downloading freetype and SDL2", dl .. " freetype sdl"
-		)
-		table.insert(content, CopyFile(settings.link.Output(settings, "") .. "/SDL2.dll", "other/sdl/windows/lib" .. _arch .. "/SDL2.dll"))
-		table.insert(content, CopyFile(settings.link.Output(settings, "") .. "/freetype.dll", "other/freetype/windows/lib" .. _arch .. "/freetype.dll"))
-		AddDependency(settings.link.Output(settings, "") .. "/SDL2.dll", "other/sdl/include/SDL.h")
-		AddDependency(settings.link.Output(settings, "") .. "/freetype.dll", "other/freetype/include/ft2build.h")
-	end
-	PseudoTarget(settings.link.Output(settings, "content") .. settings.link.extension, content)
-end
-
--- create all targets for specified configuration & architecture
-function GenerateSettings(conf, arch, builddir, compiler)
-	local settings = NewSettings()
-
-	-- Set compiler if explicitly requested
-	if compiler == "gcc" then
-		SetDriversGCC(settings)
-	elseif compiler == "clang" then
-		SetDriversClang(settings)
-	elseif compiler == "cl" then
-		SetDriversCL(settings)
-	else
-		-- apply compiler settings
-		config.compiler:Apply(settings)
-		compiler = config.compiler.driver
-	end
-	
-	if conf ==  "debug" then
-		settings.debug = 1
-		settings.optimize = 0
-		settings.cc.defines:Add("CONF_DEBUG")
-	else
-		settings.debug = 0
-		settings.optimize = 1
-		settings.cc.defines:Add("CONF_RELEASE")
-	end
-	
-	-- Generate object files in {builddir}/objs/
-	settings.cc.Output = function (settings_, input)
-		-- strip 
-		input = input:gsub("^src/", "")
-		input = input:gsub("^" .. generated_src_dir .. "/", "")
-		return PathJoin(PathJoin(builddir, "objs"), PathBase(input))
-	end
-	
-	-- Build output files in {builddir}
-	settings.link.Output = function (settings_, input)
-		return PathJoin(builddir, PathBase(input) .. settings_.config_ext)
-	end
-	
-	settings.cc.includes:Add("src")
-	settings.cc.includes:Add("src/engine/external/pnglite")
-	settings.cc.includes:Add("src/engine/external/wavpack")
-	settings.cc.includes:Add(generated_src_dir)
-	
-	if family == "windows" then
-		GenerateWindowsSettings(settings, conf, arch, compiler)
-	elseif family == "unix" then
+	if family == "unix" then
 		if platform == "macosx" then
-			GenerateMacOSXSettings(settings, conf, arch, compiler)
-		elseif platform == "solaris" then
-			GenerateSolarisSettings(settings, conf, arch, compiler)
-		else -- Linux, BSD
-			GenerateLinuxSettings(settings, conf, arch, compiler)
+			client_settings.link.frameworks:Add("OpenGL")
+			client_settings.link.frameworks:Add("AGL")
+			client_settings.link.frameworks:Add("Carbon")
+			client_settings.link.frameworks:Add("Cocoa")
+			launcher_settings.link.frameworks:Add("Cocoa")
+		else
+			client_settings.link.libs:Add("X11")
+			client_settings.link.libs:Add("GL")
+			client_settings.link.libs:Add("GLU")
 		end
+
+	elseif family == "windows" then
+		client_settings.link.libs:Add("opengl32")
+		client_settings.link.libs:Add("glu32")
+		client_settings.link.libs:Add("winmm")
 	end
 
-	return settings
-end
+	-- apply sdl settings
+	config.sdl:Apply(client_settings)
+	-- apply freetype settings
+	config.freetype:Apply(client_settings)
 
--- String formatting with named parameters, by RiciLake http://lua-users.org/wiki/StringInterpolation
-function interp(s, tab)
-	return (s:gsub('%%%((%a%w*)%)([-0-9%.]*[cdeEfgGiouxXsq])',
-			function(k, fmt)
-				return tab[k] and ("%"..fmt):format(tab[k]) or '%('..k..')'..fmt
-			end))
-end
+	engine = Compile(engine_settings, Collect("src/engine/shared/*.cpp", "src/base/*.c"))
+	client = Compile(client_settings, Collect("src/engine/client/*.cpp"))
+	server = Compile(server_settings, Collect("src/engine/server/*.cpp"))
 
-function CopyToDir(dst, ...)
-	local output = {}
-	for filename in TableWalk({...}) do
-		table.insert(output, CopyFile(PathJoin(dst, string.sub(filename, string.len(content_src_dir)+1)), filename))
+	versionserver = Compile(settings, Collect("src/versionsrv/*.cpp"))
+	masterserver = Compile(settings, Collect("src/mastersrv/*.cpp"))
+	game_shared = Compile(settings, Collect("src/game/*.cpp"), nethash, network_source)
+	game_client = Compile(settings, CollectRecursive("src/game/client/*.cpp"), client_content_source)
+	game_server = Compile(settings, CollectRecursive("src/game/server/*.cpp"), server_content_source)
+	game_editor = Compile(settings, Collect("src/game/editor/*.cpp"))
+
+	-- build tools (TODO: fix this so we don't get double _d_d stuff)
+	tools_src = Collect("src/tools/*.cpp", "src/tools/*.c")
+
+	server_osxlaunch = {}
+	if platform == "macosx" then
+		server_osxlaunch = Compile(launcher_settings, "src/osxlaunch/server.m")
 	end
-	return output
+
+	tools = {}
+	for i,v in ipairs(tools_src) do
+		toolname = PathFilename(PathBase(v))
+		tools[i] = Link(settings, toolname, Compile(settings, v), engine, md5, zlib, pnglite)
+	end
+
+	-- build client, server, version server and master server
+	client_exe = Link(client_settings, "teeworlds", game_shared, game_client,
+		engine, client, game_editor, md5, zlib, pnglite, wavpack,
+		client_link_other, jsonparser)
+
+	server_exe = Link(server_settings, "teeworlds_srv", engine, server,
+		game_shared, game_server, md5, zlib, server_link_other, jsonparser)
+
+	serverlaunch = {}
+	if platform == "macosx" then
+		serverlaunch = Link(launcher_settings, "serverlaunch", server_osxlaunch)
+	end
+
+	versionserver_exe = Link(server_settings, "versionsrv", versionserver,
+		engine, md5, zlib)
+
+	masterserver_exe = Link(server_settings, "mastersrv", masterserver,
+		engine, md5, zlib)
+
+	server_depends = {}
+	if string.find(settings.config_name, "sql") then
+		server_depends = server_sql_depends
+	end
+	
+	-- make targets
+	c = PseudoTarget("client".."_"..settings.config_name, client_exe, client_depends, shared_depends)
+	s = PseudoTarget("server".."_"..settings.config_name, server_exe, serverlaunch, server_depends, shared_depends)
+	g = PseudoTarget("game".."_"..settings.config_name, client_exe, server_exe)
+
+	v = PseudoTarget("versionserver".."_"..settings.config_name, versionserver_exe)
+	m = PseudoTarget("masterserver".."_"..settings.config_name, masterserver_exe)
+	t = PseudoTarget("tools".."_"..settings.config_name, tools)
+
+	all = PseudoTarget(settings.config_name, c, s, v, m, t)
+	return all
 end
 
-function split(str, sep)
-	local vals = {}
-	str:gsub("([^,]+)", function(val) table.insert(vals, val) end)
-	return vals
-end
 
--- Supported archtitectures: x86, amd64, ppc, ppc64
-if ScriptArgs['arch'] then
-	archs = split(ScriptArgs['arch'])
-else
-	if arch == "ia32" then
-		archs = {"x86"}
-	elseif arch == "ia64" or arch == "amd64" then
-		archs = {"x86_64"}
+debug_settings = NewSettings()
+debug_settings.config_name = "debug"
+debug_settings.config_ext = "_d"
+debug_settings.debug = 1
+debug_settings.optimize = 0
+debug_settings.cc.defines:Add("CONF_DEBUG")
+
+debug_sql_settings = NewSettings()
+debug_sql_settings.config_name = "sql_debug"
+debug_sql_settings.config_ext = "_sql_d"
+debug_sql_settings.debug = 1
+debug_sql_settings.optimize = 0
+debug_sql_settings.cc.defines:Add("CONF_DEBUG", "CONF_SQL")
+
+debug_teerace_settings = NewSettings()
+debug_teerace_settings.config_name = "teerace_debug"
+debug_teerace_settings.config_ext = "_teerace_d"
+debug_teerace_settings.debug = 1
+debug_teerace_settings.optimize = 0
+debug_teerace_settings.cc.defines:Add("CONF_DEBUG", "CONF_TEERACE")
+
+debug_teerace_sql_settings = NewSettings()
+debug_teerace_sql_settings.config_name = "teerace_sql_debug"
+debug_teerace_sql_settings.config_ext = "_teerace_sql_d"
+debug_teerace_sql_settings.debug = 1
+debug_teerace_sql_settings.optimize = 0
+debug_teerace_sql_settings.cc.defines:Add("CONF_DEBUG", "CONF_TEERACE", "CONF_SQL")
+
+release_settings = NewSettings()
+release_settings.config_name = "release"
+release_settings.config_ext = ""
+release_settings.debug = 0
+release_settings.optimize = 1
+release_settings.cc.defines:Add("CONF_RELEASE")
+
+release_sql_settings = NewSettings()
+release_sql_settings.config_name = "sql_release"
+release_sql_settings.config_ext = "_sql"
+release_sql_settings.debug = 0
+release_sql_settings.optimize = 1
+release_sql_settings.cc.defines:Add("CONF_RELEASE", "CONF_SQL")
+
+release_teerace_settings = NewSettings()
+release_teerace_settings.config_name = "teerace_release"
+release_teerace_settings.config_ext = "_teerace"
+release_teerace_settings.debug = 0
+release_teerace_settings.optimize = 1
+release_teerace_settings.cc.defines:Add("CONF_RELEASE", "CONF_TEERACE")
+
+release_teerace_sql_settings = NewSettings()
+release_teerace_sql_settings.config_name = "teerace_sql_release"
+release_teerace_sql_settings.config_ext = "_teerace_sql"
+release_teerace_sql_settings.debug = 0
+release_teerace_sql_settings.optimize = 1
+release_teerace_sql_settings.cc.defines:Add("CONF_RELEASE", "CONF_TEERACE", "CONF_SQL")
+
+config.mysql:Apply(debug_sql_settings)
+config.mysql:Apply(debug_teerace_sql_settings)
+config.mysql:Apply(release_sql_settings)
+config.mysql:Apply(release_teerace_sql_settings)
+
+if platform == "macosx" then
+	debug_settings_ppc = debug_settings:Copy()
+	debug_settings_ppc.config_name = "debug_ppc"
+	debug_settings_ppc.config_ext = "_ppc_d"
+	debug_settings_ppc.cc.flags:Add("-arch ppc")
+	debug_settings_ppc.link.flags:Add("-arch ppc")
+	debug_settings_ppc.cc.defines:Add("CONF_DEBUG")
+
+	debug_sql_settings_ppc = debug_sql_settings:Copy()
+	debug_sql_settings_ppc.config_name = "sql_debug_ppc"
+	debug_sql_settings_ppc.config_ext = "_sql_ppc_d"
+	debug_sql_settings_ppc.cc.flags:Add("-arch ppc")
+	debug_sql_settings_ppc.link.flags:Add("-arch ppc")
+	debug_sql_settings_ppc.cc.defines:Add("CONF_DEBUG", "CONF_SQL")
+	
+	debug_teerace_settings_ppc = debug_teerace_settings:Copy()
+	debug_teerace_settings_ppc.config_name = "teerace_debug_ppc"
+	debug_teerace_settings_ppc.config_ext = "_teerace_ppc_d"
+	debug_teerace_settings_ppc.cc.flags:Add("-arch ppc")
+	debug_teerace_settings_ppc.link.flags:Add("-arch ppc")
+	debug_teerace_settings_ppc.cc.defines:Add("CONF_DEBUG", "CONF_TEERACE")
+	
+	debug_teerace_sql_settings_ppc = debug_teerace_sql_settings:Copy()
+	debug_teerace_sql_settings_ppc.config_name = "teerace_sql_debug_ppc"
+	debug_teerace_sql_settings_ppc.config_ext = "_teerace_sql_ppc_d"
+	debug_teerace_sql_settings_ppc.cc.flags:Add("-arch ppc")
+	debug_teerace_sql_settings_ppc.link.flags:Add("-arch ppc")
+	debug_teerace_sql_settings_ppc.cc.defines:Add("CONF_DEBUG", "CONF_TEERACE", "CONF_SQL")
+
+	release_settings_ppc = release_settings:Copy()
+	release_settings_ppc.config_name = "release_ppc"
+	release_settings_ppc.config_ext = "_ppc"
+	release_settings_ppc.cc.flags:Add("-arch ppc")
+	release_settings_ppc.link.flags:Add("-arch ppc")
+	release_settings_ppc.cc.defines:Add("CONF_RELEASE")
+
+	release_sql_settings_ppc = release_sql_settings:Copy()
+	release_sql_settings_ppc.config_name = "sql_release_ppc"
+	release_sql_settings_ppc.config_ext = "_sql_ppc"
+	release_sql_settings_ppc.cc.flags:Add("-arch ppc")
+	release_sql_settings_ppc.link.flags:Add("-arch ppc")
+	release_sql_settings_ppc.cc.defines:Add("CONF_RELEASE", "CONF_SQL")
+	
+	release_teerace_settings_ppc = release_teerace_settings:Copy()
+	release_teerace_settings_ppc.config_name = "teerace_release_ppc"
+	release_teerace_settings_ppc.config_ext = "_teerace_ppc"
+	release_teerace_settings_ppc.cc.flags:Add("-arch ppc")
+	release_teerace_settings_ppc.link.flags:Add("-arch ppc")
+	release_teerace_settings_ppc.cc.defines:Add("CONF_RELEASE", "CONF_TEERACE")
+	
+	release_teerace_sql_settings_ppc = release_teerace_sql_settings:Copy()
+	release_teerace_sql_settings_ppc.config_name = "teerace_sql_release_ppc"
+	release_teerace_sql_settings_ppc.config_ext = "_teerace_sql_ppc"
+	release_teerace_sql_settings_ppc.cc.flags:Add("-arch ppc")
+	release_teerace_sql_settings_ppc.link.flags:Add("-arch ppc")
+	release_teerace_sql_settings_ppc.cc.defines:Add("CONF_RELEASE", "CONF_TEERACE", "CONF_SQL")
+
+	ppc_d = build(debug_settings_ppc)
+	sql_ppc_d = build(debug_sql_settings_ppc)
+	teerace_ppc_d = build(debug_teerace_settings_ppc)
+	teerace_sql_ppc_d = build(debug_teerace_sql_settings_ppc)
+	ppc_r = build(release_settings_ppc)
+	sql_ppc_r = build(release_sql_settings_ppc)
+	teerace_ppc_r = build(release_teerace_settings_ppc)
+	teerace_sql_ppc_r = build(release_teerace_sql_settings_ppc)
+
+	if arch == "ia32" or arch == "amd64" then
+		debug_settings_x86 = debug_settings:Copy()
+		debug_settings_x86.config_name = "debug_x86"
+		debug_settings_x86.config_ext = "_x86_d"
+		debug_settings_x86.cc.flags:Add("-arch i386")
+		debug_settings_x86.link.flags:Add("-arch i386")
+		debug_settings_x86.cc.defines:Add("CONF_DEBUG")
+
+		debug_sql_settings_x86 = debug_sql_settings:Copy()
+		debug_sql_settings_x86.config_name = "sql_debug_x86"
+		debug_sql_settings_x86.config_ext = "_sql_x86_d"
+		debug_sql_settings_x86.cc.flags:Add("-arch i386")
+		debug_sql_settings_x86.link.flags:Add("-arch i386")
+		debug_sql_settings_x86.cc.defines:Add("CONF_DEBUG", "CONF_SQL")
+		
+		debug_teerace_settings_x86 = debug_teerace_settings:Copy()
+		debug_teerace_settings_x86.config_name = "teerace_debug_x86"
+		debug_teerace_settings_x86.config_ext = "_teerace_x86_d"
+		debug_teerace_settings_x86.cc.flags:Add("-arch i386")
+		debug_teerace_settings_x86.link.flags:Add("-arch i386")
+		debug_teerace_settings_x86.cc.defines:Add("CONF_DEBUG", "CONF_TEERACE")
+		
+		debug_teerace_sql_settings_x86 = debug_teerace_sql_settings:Copy()
+		debug_teerace_sql_settings_x86.config_name = "teerace_sql_debug_x86"
+		debug_teerace_sql_settings_x86.config_ext = "_teerace_sql_x86_d"
+		debug_teerace_sql_settings_x86.cc.flags:Add("-arch i386")
+		debug_teerace_sql_settings_x86.link.flags:Add("-arch i386")
+		debug_teerace_sql_settings_x86.cc.defines:Add("CONF_DEBUG", "CONF_TEERACE", "CONF_SQL")
+
+		release_settings_x86 = release_settings:Copy()
+		release_settings_x86.config_name = "release_x86"
+		release_settings_x86.config_ext = "_x86"
+		release_settings_x86.cc.flags:Add("-arch i386")
+		release_settings_x86.link.flags:Add("-arch i386")
+		release_settings_x86.cc.defines:Add("CONF_RELEASE")
+
+		release_sql_settings_x86 = release_sql_settings:Copy()
+		release_sql_settings_x86.config_name = "sql_release_x86"
+		release_sql_settings_x86.config_ext = "_sql_x86"
+		release_sql_settings_x86.cc.flags:Add("-arch i386")
+		release_sql_settings_x86.link.flags:Add("-arch i386")
+		release_sql_settings_x86.cc.defines:Add("CONF_RELEASE", "CONF_SQL")
+		
+		release_teerace_settings_x86 = release_teerace_settings:Copy()
+		release_teerace_settings_x86.config_name = "teerace_release_x86"
+		release_teerace_settings_x86.config_ext = "_teerace_x86"
+		release_teerace_settings_x86.cc.flags:Add("-arch i386")
+		release_teerace_settings_x86.link.flags:Add("-arch i386")
+		release_teerace_settings_x86.cc.defines:Add("CONF_RELEASE", "CONF_TEERACE")
+		
+		release_teerace_sql_settings_x86 = release_teerace_sql_settings:Copy()
+		release_teerace_sql_settings_x86.config_name = "teerace_sql_release_x86"
+		release_teerace_sql_settings_x86.config_ext = "_teerace_sql_x86"
+		release_teerace_sql_settings_x86.cc.flags:Add("-arch i386")
+		release_teerace_sql_settings_x86.link.flags:Add("-arch i386")
+		release_teerace_sql_settings_x86.cc.defines:Add("CONF_RELEASE", "CONF_TEERACE", "CONF_SQL")
+	
+		x86_d = build(debug_settings_x86)
+		sql_x86_d = build(debug_sql_settings_x86)
+		teerace_x86_d = build(debug_teerace_settings_x86)
+		teerace_sql_x86_d = build(debug_teerace_sql_settings_x86)
+		x86_r = build(release_settings_x86)
+		sql_x86_r = build(release_sql_settings_x86)
+		teerace_x86_r = build(release_teerace_settings_x86)
+		teerace_sql_x86_r = build(release_teerace_sql_settings_x86)
+	end
+
+	if arch == "amd64" then
+		debug_settings_x86_64 = debug_settings:Copy()
+		debug_settings_x86_64.config_name = "debug_x86_64"
+		debug_settings_x86_64.config_ext = "_x86_64_d"
+		debug_settings_x86_64.cc.flags:Add("-arch x86_64")
+		debug_settings_x86_64.link.flags:Add("-arch x86_64")
+		debug_settings_x86_64.cc.defines:Add("CONF_DEBUG")
+
+		debug_sql_settings_x86_64 = debug_sql_settings:Copy()
+		debug_sql_settings_x86_64.config_name = "sql_debug_x86_64"
+		debug_sql_settings_x86_64.config_ext = "_sql_x86_64_d"
+		debug_sql_settings_x86_64.cc.flags:Add("-arch x86_64")
+		debug_sql_settings_x86_64.link.flags:Add("-arch x86_64")
+		debug_sql_settings_x86_64.cc.defines:Add("CONF_DEBUG", "CONF_SQL")
+		
+		debug_teerace_settings_x86_64 = debug_teerace_settings:Copy()
+		debug_teerace_settings_x86_64.config_name = "teerace_debug_x86_64"
+		debug_teerace_settings_x86_64.config_ext = "_teerace_x86_64_d"
+		debug_teerace_settings_x86_64.cc.flags:Add("-arch x86_64")
+		debug_teerace_settings_x86_64.link.flags:Add("-arch x86_64")
+		debug_teerace_settings_x86_64.cc.defines:Add("CONF_DEBUG", "CONF_TEERACE")
+		
+		debug_teerace_sql_settings_x86_64 = debug_teerace_sql_settings:Copy()
+		debug_teerace_sql_settings_x86_64.config_name = "teerace_sql_debug_x86_64"
+		debug_teerace_sql_settings_x86_64.config_ext = "_teerace_sql_x86_64_d"
+		debug_teerace_sql_settings_x86_64.cc.flags:Add("-arch x86_64")
+		debug_teerace_sql_settings_x86_64.link.flags:Add("-arch x86_64")
+		debug_teerace_sql_settings_x86_64.cc.defines:Add("CONF_DEBUG", "CONF_TEERACE", "CONF_SQL")
+
+		release_settings_x86_64 = release_settings:Copy()
+		release_settings_x86_64.config_name = "release_x86_64"
+		release_settings_x86_64.config_ext = "_x86_64"
+		release_settings_x86_64.cc.flags:Add("-arch x86_64")
+		release_settings_x86_64.link.flags:Add("-arch x86_64")
+		release_settings_x86_64.cc.defines:Add("CONF_RELEASE")
+
+		release_sql_settings_x86_64 = release_sql_settings:Copy()
+		release_sql_settings_x86_64.config_name = "sql_release_x86_64"
+		release_sql_settings_x86_64.config_ext = "_sql_x86_64"
+		release_sql_settings_x86_64.cc.flags:Add("-arch x86_64")
+		release_sql_settings_x86_64.link.flags:Add("-arch x86_64")
+		release_sql_settings_x86_64.cc.defines:Add("CONF_RELEASE", "CONF_SQL")
+		
+		release_teerace_settings_x86_64 = release_teerace_settings:Copy()
+		release_teerace_settings_x86_64.config_name = "teerace_release_x86_64"
+		release_teerace_settings_x86_64.config_ext = "_teerace_x86_64"
+		release_teerace_settings_x86_64.cc.flags:Add("-arch x86_64")
+		release_teerace_settings_x86_64.link.flags:Add("-arch x86_64")
+		release_teerace_settings_x86_64.cc.defines:Add("CONF_RELEASE", "CONF_TEERACE")
+		
+		release_teerace_sql_settings_x86_64 = release_teerace_sql_settings:Copy()
+		release_teerace_sql_settings_x86_64.config_name = "teerace_sql_release_x86_64"
+		release_teerace_sql_settings_x86_64.config_ext = "_teerace_sql_x86_64"
+		release_teerace_sql_settings_x86_64.cc.flags:Add("-arch x86_64")
+		release_teerace_sql_settings_x86_64.link.flags:Add("-arch x86_64")
+		release_teerace_sql_settings_x86_64.cc.defines:Add("CONF_RELEASE", "CONF_TEERACE", "CONF_SQL")
+
+		x86_64_d = build(debug_settings_x86_64)
+		sql_x86_64_d = build(debug_sql_settings_x86_64)
+		teerace_x86_64_d = build(debug_teerace_settings_x86_64)
+		teerace_sql_x86_64_d = build(debug_teerace_sql_settings_x86_64)
+		x86_64_r = build(release_settings_x86_64)
+		sql_x86_64_r = build(release_sql_settings_x86_64)
+		teerace_x86_64_r = build(release_teerace_settings_x86_64)
+		teerace_sql_x86_64_r = build(release_teerace_sql_settings_x86_64)
+	end
+
+	DefaultTarget("game_debug_x86")
+	
+	if config.macosxppc.value then
+		if arch == "ia32" then
+			PseudoTarget("release", ppc_r, x86_r)
+			PseudoTarget("sql_release", sql_ppc_r, sql_x86_r)
+			PseudoTarget("teerace_release", teerace_ppc_r, teerace_x86_r)
+			PseudoTarget("teerace_sql_release", teerace_sql_ppc_r, teerace_sql_x86_r)
+			PseudoTarget("debug", ppc_d, x86_d)
+			PseudoTarget("sql_debug", sql_ppc_d, sql_x86_d)
+			PseudoTarget("teerace_debug", teerace_ppc_d, teerace_x86_d)
+			PseudoTarget("teerace_sql_debug", teerace_sql_ppc_d, teerace_sql_x86_d)
+			PseudoTarget("server_release", "server_release_ppc", "server_release_x86")
+			PseudoTarget("server_sql_release", "server_sql_release_ppc", "server_sql_release_x86")
+			PseudoTarget("server_teerace_release", "server_teerace_release_ppc", "server_teerace_release_x86")
+			PseudoTarget("server_teerace_sql_release", "server_teerace_sql_release_ppc", "server_teerace_sql_release_x86")
+			PseudoTarget("server_debug", "server_debug_ppc", "server_debug_x86")
+			PseudoTarget("server_sql_debug", "server_sql_debug_ppc", "server_sql_debug_x86")
+			PseudoTarget("server_teerace_debug", "server_teerace_debug_ppc", "server_teerace_debug_x86")
+			PseudoTarget("server_teerace_sql_debug", "server_teerace_sql_debug_ppc", "server_teerace_sql_debug_x86")
+			PseudoTarget("client_release", "client_release_ppc", "client_release_x86")
+			PseudoTarget("client_debug", "client_debug_ppc", "client_debug_x86")
+		elseif arch == "amd64" then
+			PseudoTarget("release", ppc_r, x86_r, x86_64_r)
+			PseudoTarget("sql_release", sql_ppc_r, sql_x86_r, sql_x86_64_r)
+			PseudoTarget("teerace_release", teerace_ppc_r, teerace_x86_r, teerace_x86_64_r)
+			PseudoTarget("teerace_sql_release", teerace_sql_ppc_r, teerace_sql_x86_r, teerace_sql_x86_64_r)
+			PseudoTarget("debug", ppc_d, x86_d, x86_64_d)
+			PseudoTarget("sql_debug", sql_ppc_d, sql_x86_d, sql_x86_64_d)
+			PseudoTarget("teerace_debug", teerace_ppc_d, teerace_x86_d, teerace_x86_64_d)
+			PseudoTarget("teerace_sql_debug", teerace_sql_ppc_d, teerace_sql_x86_d, teerace_sql_x86_64_d)
+			PseudoTarget("server_release", "server_release_ppc", "server_release_x86", "server_release_x86_64")
+			PseudoTarget("server_sql_release", "server_sql_release_ppc", "server_sql_release_x86", "server_sql_release_x86_64")
+			PseudoTarget("server_teerace_release", "server_teerace_release_ppc", "server_teerace_release_x86", "server_teerace_release_x86_64")
+			PseudoTarget("server_teerace_sql_release", "server_teerace_sql_release_ppc", "server_teerace_sql_release_x86", "server_teerace_sql_release_x86_64")
+			PseudoTarget("server_debug", "server_debug_ppc", "server_debug_x86", "server_debug_x86_64")
+			PseudoTarget("server_sql_debug", "server_sql_debug_ppc", "server_sql_debug_x86", "server_sql_debug_x86_64")
+			PseudoTarget("server_teerace_debug", "server_teerace_debug_ppc", "server_teerace_debug_x86", "server_teerace_debug_x86_64")
+			PseudoTarget("server_teerace_sql_debug", "server_teerace_sql_debug_ppc", "server_teerace_sql_debug_x86", "server_teerace_sql_debug_x86_64")
+			PseudoTarget("client_release", "client_release_ppc", "client_release_x86", "client_release_x86_64")
+			PseudoTarget("client_debug", "client_debug_ppc", "client_debug_x86", "client_debug_x86_64")
+		else
+			PseudoTarget("release", ppc_r)
+			PseudoTarget("sql_release", sql_ppc_r)
+			PseudoTarget("teerace_release", teerace_ppc_r)
+			PseudoTarget("teerace_sql_release", teerace_sql_ppc_r)
+			PseudoTarget("debug", ppc_d)
+			PseudoTarget("sql_debug", sql_ppc_d)
+			PseudoTarget("teerace_debug", teerace_ppc_d)
+			PseudoTarget("teerace_sql_debug", teerace_sql_ppc_d)
+			PseudoTarget("server_release", "server_release_ppc")
+			PseudoTarget("server_sql_release", "server_sql_release_ppc")
+			PseudoTarget("server_teerace_release", "server_teerace_release_ppc")
+			PseudoTarget("server_teerace_sql_release", "server_teerace_sql_release_ppc")
+			PseudoTarget("server_debug", "server_debug_ppc")
+			PseudoTarget("server_sql_debug", "server_sql_debug_ppc")
+			PseudoTarget("server_teerace_debug", "server_teerace_debug_ppc")
+			PseudoTarget("server_teerace_sql_debug", "server_teerace_sql_debug_ppc")
+			PseudoTarget("client_release", "client_release_ppc")
+			PseudoTarget("client_debug", "client_debug_ppc")
+		end
 	else
-		archs = {arch}
-	end
-end
-
-if ScriptArgs['conf'] then
-	confs = split(ScriptArgs['conf'])
-else
-	confs = {"debug"}
-end
-
-if ScriptArgs['compiler'] then
-	compiler = ScriptArgs['compiler']
-else
-	compiler = nil
-end
-
-if ScriptArgs['builddir'] then
-	builddir = ScriptArgs['builddir']
-end
-
-targets = {client="teeworlds", server="teeworlds_srv",
-           versionserver="versionsrv", masterserver="mastersrv",
-           tools="pseudo_tools", content="content"}
-
-subtargets = {}
-for t, cur_target in pairs(targets) do
-	subtargets[cur_target] = {}
-end
-for a, cur_arch in ipairs(archs) do
-	for c, cur_conf in ipairs(confs) do
-		cur_builddir = interp(builddir, {platform=family, arch=cur_arch, target=cur_target, conf=cur_conf, compiler=compiler})
-		local settings = GenerateSettings(cur_conf, cur_arch, cur_builddir, compiler)
-		for t, cur_target in pairs(targets) do
-			table.insert(subtargets[cur_target], PathJoin(cur_builddir, cur_target .. settings.link.extension))
+		if arch == "ia32" then
+			PseudoTarget("release", x86_r)
+			PseudoTarget("sql_release", sql_x86_r)
+			PseudoTarget("teerace_release", teerace_x86_r)
+			PseudoTarget("teerace_sql_release", teerace_sql_x86_r)
+			PseudoTarget("debug", x86_d)
+			PseudoTarget("sql_debug", sql_x86_d)
+			PseudoTarget("teerace_debug", teerace_x86_d)
+			PseudoTarget("teerace_sql_debug", teerace_sql_x86_d)
+			PseudoTarget("server_release", "server_release_x86")
+			PseudoTarget("server_sql_release", "server_sql_release_x86")
+			PseudoTarget("server_teerace_release", "server_teerace_release_x86")
+			PseudoTarget("server_teerace_sql_release", "server_teerace_sql_release_x86")
+			PseudoTarget("server_debug", "server_debug_x86")
+			PseudoTarget("server_sql_debug", "server_sql_debug_x86")
+			PseudoTarget("server_teerace_debug", "server_teerace_debug_x86")
+			PseudoTarget("server_teerace_sql_debug", "server_teerace_sql_debug_x86")
+			PseudoTarget("client_release", "client_release_x86")
+			PseudoTarget("client_debug", "client_debug_x86")
+		elseif arch == "amd64" then
+			PseudoTarget("release", x86_r, x86_64_r)
+			PseudoTarget("sql_release", sql_x86_r, sql_x86_64_r)
+			PseudoTarget("teerace_release", _ppc_r, teerace_x86_r, teerace_x86_64_r)
+			PseudoTarget("teerace_sql_release", teerace_sql_x86_r, teerace_sql_x86_64_r)
+			PseudoTarget("debug", x86_d, x86_64_d)
+			PseudoTarget("sql_debug", sql_x86_d, sql_x86_64_d)
+			PseudoTarget("teerace_debug", teerace_x86_d, teerace_x86_64_d)
+			PseudoTarget("teerace_sql_debug", teerace_sql_x86_d, teerace_sql_x86_64_d)
+			PseudoTarget("server_release", "server_release_x86", "server_release_x86_64")
+			PseudoTarget("server_sql_release", "server_sql_release_x86", "server_sql_release_x86_64")
+			PseudoTarget("server_teerace_release", "server_teerace_release_x86", "server_teerace_release_x86_64")
+			PseudoTarget("server_teerace_sql_release", "server_teerace_sql_release_x86", "server_teerace_sql_release_x86_64")
+			PseudoTarget("server_debug", "server_debug_x86", "server_debug_x86_64")
+			PseudoTarget("server_sql_debug", "server_sql_debug_x86", "server_sql_debug_x86_64")
+			PseudoTarget("server_teerace_debug", "server_teerace_debug_x86", "server_teerace_debug_x86_64")
+			PseudoTarget("server_teerace_sql_debug", "server_teerace_sql_debug_x86", "server_teerace_sql_debug_x86_64")
+			PseudoTarget("client_release", "client_release_x86", "client_release_x86_64")
+			PseudoTarget("client_debug", "client_debug_x86", "client_debug_x86_64")
 		end
 	end
+else
+	build(debug_settings)
+	build(debug_sql_settings)
+	build(debug_teerace_settings)
+	build(debug_teerace_sql_settings)
+	build(release_settings)
+	build(release_sql_settings)
+	build(release_teerace_settings)
+	build(release_teerace_sql_settings)
+	DefaultTarget("game_debug")
 end
-
-for cur_name, cur_target in pairs(targets) do
-	-- Supertarget for all configurations and architectures of that target
-	PseudoTarget(cur_name, subtargets[cur_target])
-end
-
-PseudoTarget("game", "client", "server", "content")
-DefaultTarget("game")

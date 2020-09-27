@@ -1,22 +1,17 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
-#include <algorithm> // sort  TODO: remove this
-
-#include <engine/external/json-parser/json.h>
-
 #include <engine/config.h>
+#include <engine/friends.h>
 #include <engine/graphics.h>
 #include <engine/keys.h>
 #include <engine/serverbrowser.h>
-#include <engine/storage.h>
 #include <engine/textrender.h>
 #include <engine/shared/config.h>
-#include <engine/shared/jsonwriter.h>
-#include <engine/client/contacts.h>
 
-#include <generated/client_data.h>
-#include <generated/protocol.h>
+#include <game/generated/client_data.h>
+#include <game/generated/protocol.h>
 
+#include <game/localization.h>
 #include <game/version.h>
 #include <game/client/render.h>
 #include <game/client/ui.h>
@@ -24,2401 +19,1037 @@
 
 #include "menus.h"
 
-CMenus::CColumn CMenus::ms_aBrowserCols[] = {  // Localize("Server"); Localize("Type"); Localize("Map"); Localize("Players"); Localize("Ping"); - these strings are localized within CLocConstString
-	{COL_BROWSER_FLAG,		-1,									" ",		-1, 4*16.0f+3*2.0f, 0, {0}, {0}, CUI::ALIGN_CENTER},
-	{COL_BROWSER_NAME,		IServerBrowser::SORT_NAME,			"Server",	0, 310.0f, 0, {0}, {0}, CUI::ALIGN_CENTER},
-	{COL_BROWSER_GAMETYPE,	IServerBrowser::SORT_GAMETYPE,		"Type",		1, 70.0f,  0, {0}, {0}, CUI::ALIGN_CENTER},
-	{COL_BROWSER_MAP,		IServerBrowser::SORT_MAP,			"Map",		1, 100.0f, 0, {0}, {0}, CUI::ALIGN_CENTER},
-	{COL_BROWSER_PLAYERS,	IServerBrowser::SORT_NUMPLAYERS,	"Players",	1, 50.0f,  0, {0}, {0}, CUI::ALIGN_CENTER},
-	{COL_BROWSER_PING,		IServerBrowser::SORT_PING,			"Ping",		1, 40.0f,  0, {0}, {0}, CUI::ALIGN_CENTER},
-};
 
-CServerFilterInfo CMenus::CBrowserFilter::ms_FilterStandard = {IServerBrowser::FILTER_COMPAT_VERSION|IServerBrowser::FILTER_PURE|IServerBrowser::FILTER_PURE_MAP, 999, -1, 0, {{0}}, {0}};
-CServerFilterInfo CMenus::CBrowserFilter::ms_FilterFavorites = {IServerBrowser::FILTER_COMPAT_VERSION|IServerBrowser::FILTER_FAVORITE, 999, -1, 0, {{0}}, {0}};
-CServerFilterInfo CMenus::CBrowserFilter::ms_FilterAll = {IServerBrowser::FILTER_COMPAT_VERSION, 999, -1, 0, {{0}}, {0}};
-
-vec3 TextHighlightColor = vec3(0.4f, 0.4f, 1.0f);
-
-// filters
-CMenus::CBrowserFilter::CBrowserFilter(int Custom, const char* pName, IServerBrowser *pServerBrowser)
-	: m_DeleteButtonContainer(true), m_UpButtonContainer(true), m_DownButtonContainer(true)
+void CMenus::RenderServerbrowserServerList(CUIRect View)
 {
-	m_Extended = false;
-	m_Custom = Custom;
-	str_copy(m_aName, pName, sizeof(m_aName));
-	m_pServerBrowser = pServerBrowser;
-	switch(m_Custom)
+	CUIRect Headers;
+	CUIRect Status;
+
+	View.HSplitTop(ms_ListheaderHeight, &Headers, &View);
+	View.HSplitBottom(28.0f, &View, &Status);
+
+	// split of the scrollbar
+	RenderTools()->DrawUIRect(&Headers, vec4(1,1,1,0.25f), CUI::CORNER_T, 5.0f);
+	Headers.VSplitRight(20.0f, &Headers, 0);
+
+	struct CColumn
 	{
-	case CBrowserFilter::FILTER_STANDARD:
-		m_Filter = m_pServerBrowser->AddFilter(&ms_FilterStandard);
-		break;
-	case CBrowserFilter::FILTER_FAVORITES:
-		m_Filter = m_pServerBrowser->AddFilter(&ms_FilterFavorites);
-		break;
-	default:
-		m_Filter = m_pServerBrowser->AddFilter(&ms_FilterAll);
-	}
+		int m_ID;
+		int m_Sort;
+		CLocConstString m_Caption;
+		int m_Direction;
+		float m_Width;
+		int m_Flags;
+		CUIRect m_Rect;
+		CUIRect m_Spacer;
+	};
 
-	// init buttons
-	m_SwitchButton = 0;
-}
-
-void CMenus::CBrowserFilter::Reset()
-{
-	switch(m_Custom)
+	enum
 	{
-	case CBrowserFilter::FILTER_STANDARD:
-		SetFilter(&ms_FilterStandard);
-		break;
-	case CBrowserFilter::FILTER_FAVORITES:
-		SetFilter(&ms_FilterFavorites);
-		break;
-	default:
-		SetFilter(&ms_FilterAll);
-	}
-}
+		FIXED=1,
+		SPACER=2,
 
-void CMenus::CBrowserFilter::Switch()
-{
-	m_Extended ^= 1;
-}
+		COL_FLAG_LOCK=0,
+		COL_FLAG_PURE,
+		COL_FLAG_FAV,
+		COL_NAME,
+		COL_GAMETYPE,
+		COL_MAP,
+		COL_PLAYERS,
+		COL_PING,
+		COL_VERSION,
+	};
 
-bool CMenus::CBrowserFilter::Extended() const
-{
-	return m_Extended;
-}
+	static CColumn s_aCols[] = {
+		{-1,			-1,						" ",		-1, 2.0f, 0, {0}, {0}},
+		{COL_FLAG_LOCK,	-1,						" ",		-1, 14.0f, 0, {0}, {0}},
+		{COL_FLAG_PURE,	-1,						" ",		-1, 14.0f, 0, {0}, {0}},
+		{COL_FLAG_FAV,	-1,						" ",		-1, 14.0f, 0, {0}, {0}},
+		{COL_NAME,		IServerBrowser::SORT_NAME,		"Name",		0, 300.0f, 0, {0}, {0}},	// Localize - these strings are localized within CLocConstString
+		{COL_GAMETYPE,	IServerBrowser::SORT_GAMETYPE,	"Type",		1, 50.0f, 0, {0}, {0}},
+		{COL_MAP,		IServerBrowser::SORT_MAP,			"Map", 		1, 100.0f, 0, {0}, {0}},
+		{COL_PLAYERS,	IServerBrowser::SORT_NUMPLAYERS,	"Players",	1, 60.0f, 0, {0}, {0}},
+		{-1,			-1,						" ",		1, 10.0f, 0, {0}, {0}},
+		{COL_PING,		IServerBrowser::SORT_PING,		"Ping",		1, 40.0f, FIXED, {0}, {0}},
+	};
+	// This is just for scripts/update_localization.py to work correctly (all other strings are already Localize()'d somewhere else). Don't remove!
+	// Localize("Type");
 
-int CMenus::CBrowserFilter::Custom() const
-{
-	return m_Custom;
-}
+	int NumCols = sizeof(s_aCols)/sizeof(CColumn);
 
-int CMenus::CBrowserFilter::Filter() const
-{
-	return m_Filter;
-}
-
-const char* CMenus::CBrowserFilter::Name() const
-{
-	return m_aName;
-}
-
-const void *CMenus::CBrowserFilter::ID(int Index) const
-{
-	return m_pServerBrowser->GetID(m_Filter, Index);
-}
-
-int CMenus::CBrowserFilter::NumSortedServers() const
-{
-	return m_pServerBrowser->NumSortedServers(m_Filter);
-}
-
-int CMenus::CBrowserFilter::NumPlayers() const
-{
-	return m_pServerBrowser->NumSortedPlayers(m_Filter);
-}
-
-const CServerInfo* CMenus::CBrowserFilter::SortedGet(int Index) const
-{
-	if(Index < 0 || Index >= m_pServerBrowser->NumSortedServers(m_Filter))
-		return 0;
-	return m_pServerBrowser->SortedGet(m_Filter, Index);
-}
-
-void CMenus::CBrowserFilter::SetFilterNum(int Num)
-{
-	m_Filter = Num;
-}
-
-void CMenus::CBrowserFilter::GetFilter(CServerFilterInfo *pFilterInfo) const
-{
-	m_pServerBrowser->GetFilter(m_Filter, pFilterInfo);
-}
-
-void CMenus::CBrowserFilter::SetFilter(const CServerFilterInfo *pFilterInfo)
-{
-	m_pServerBrowser->SetFilter(m_Filter, pFilterInfo);
-}
-
-void CMenus::LoadFilters()
-{
-	// read file data into buffer
-	const char *pFilename = "ui_settings.json";
-	IOHANDLE File = Storage()->OpenFile(pFilename, IOFLAG_READ, IStorage::TYPE_ALL);
-	if(!File)
-		return;
-	int FileSize = (int)io_length(File);
-	char *pFileData = (char *)mem_alloc(FileSize, 1);
-	io_read(File, pFileData, FileSize);
-	io_close(File);
-
-	// parse json data
-	json_settings JsonSettings;
-	mem_zero(&JsonSettings, sizeof(JsonSettings));
-	char aError[256];
-	json_value *pJsonData = json_parse_ex(&JsonSettings, pFileData, FileSize, aError);
-	mem_free(pFileData);
-
-	if(pJsonData == 0)
+	// do layout
+	for(int i = 0; i < NumCols; i++)
 	{
-		Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, pFilename, aError);
-		return;
-	}
-
-	// extract settings data
-	const json_value &rSettingsEntry = (*pJsonData)["settings"];
-	if(rSettingsEntry["sidebar_active"].type == json_integer)
-		m_SidebarActive = rSettingsEntry["sidebar_active"].u.integer;
-	if(rSettingsEntry["sidebar_tab"].type == json_integer)
-		m_SidebarTab = clamp(int(rSettingsEntry["sidebar_tab"].u.integer), int(SIDEBAR_TAB_INFO), int(NUM_SIDEBAR_TABS-1));
-	if(rSettingsEntry["filters"].type == json_array)
-	{
-		for(unsigned i = 0; i < IServerBrowser::NUM_TYPES; ++i)
+		if(s_aCols[i].m_Direction == -1)
 		{
-			if(i < rSettingsEntry["filters"].u.array.length && rSettingsEntry["filters"][i].type == json_integer)
-				m_aSelectedFilters[i] = rSettingsEntry["filters"][i].u.integer;
-			else
-				m_aSelectedFilters[i] = 2; // default to "all" if not set for all filters
-		}
-	}
-	else
-	{
-		for(unsigned i = 0; i < IServerBrowser::NUM_TYPES; ++i)
-			m_aSelectedFilters[i] = 2; // default to "all" if not set
-	}
+			Headers.VSplitLeft(s_aCols[i].m_Width, &s_aCols[i].m_Rect, &Headers);
 
-	// extract filter data
-	const json_value &rFilterEntry = (*pJsonData)["filter"];
-	for(unsigned i = 0; i < rFilterEntry.u.array.length; ++i)
-	{
-		char *pName = rFilterEntry[i].u.object.values[0].name;
-		const json_value &rStart = *(rFilterEntry[i].u.object.values[0].value);
-		if(rStart.type != json_object)
-			continue;
-
-		int Type = 0;
-		if(rStart["type"].type == json_integer)
-			Type = rStart["type"].u.integer;
-
-		// filter setting
-		CServerFilterInfo FilterInfo;
-		for(int j = 0; j < CServerFilterInfo::MAX_GAMETYPES; ++j)
-			FilterInfo.m_aGametype[j][0] = 0;
-		const json_value &rSubStart = rStart["settings"];
-		if(rSubStart.type == json_object)
-		{
-			if(rSubStart["filter_hash"].type == json_integer)
-				FilterInfo.m_SortHash = rSubStart["filter_hash"].u.integer;
-			const json_value &rGametypeEntry = rSubStart["filter_gametype"];
-			if(rGametypeEntry.type == json_array) // legacy: all entries are inclusive
+			if(i+1 < NumCols)
 			{
-				for(unsigned j = 0; j < rGametypeEntry.u.array.length && j < CServerFilterInfo::MAX_GAMETYPES; ++j)
-				{
-					if(rGametypeEntry[j].type == json_string)
-					{
-						str_copy(FilterInfo.m_aGametype[j], rGametypeEntry[j], sizeof(FilterInfo.m_aGametype[j]));
-						FilterInfo.m_aGametypeExclusive[j] = false;
-					}
-				}
+				//Cols[i].flags |= SPACER;
+				Headers.VSplitLeft(2, &s_aCols[i].m_Spacer, &Headers);
 			}
-			else if(rGametypeEntry.type == json_object)
+		}
+	}
+
+	for(int i = NumCols-1; i >= 0; i--)
+	{
+		if(s_aCols[i].m_Direction == 1)
+		{
+			Headers.VSplitRight(s_aCols[i].m_Width, &Headers, &s_aCols[i].m_Rect);
+			Headers.VSplitRight(2, &Headers, &s_aCols[i].m_Spacer);
+		}
+	}
+
+	for(int i = 0; i < NumCols; i++)
+	{
+		if(s_aCols[i].m_Direction == 0)
+			s_aCols[i].m_Rect = Headers;
+	}
+
+	// do headers
+	for(int i = 0; i < NumCols; i++)
+	{
+		if(DoButton_GridHeader(s_aCols[i].m_Caption, s_aCols[i].m_Caption, g_Config.m_BrSort == s_aCols[i].m_Sort, &s_aCols[i].m_Rect))
+		{
+			if(s_aCols[i].m_Sort != -1)
 			{
-				for(unsigned j = 0; j < rGametypeEntry.u.object.length && j < CServerFilterInfo::MAX_GAMETYPES; ++j)
-				{
-					const json_value &rValue = *(rGametypeEntry.u.object.values[j].value);
-					if(rValue.type == json_boolean)
-					{
-						str_copy(FilterInfo.m_aGametype[j], rGametypeEntry.u.object.values[j].name, sizeof(FilterInfo.m_aGametype[j]));
-						FilterInfo.m_aGametypeExclusive[j] = rValue.u.boolean;
-					}
-				}
-			}
-			if(rSubStart["filter_ping"].type == json_integer)
-				FilterInfo.m_Ping = rSubStart["filter_ping"].u.integer;
-			if(rSubStart["filter_serverlevel"].type == json_integer)
-				FilterInfo.m_ServerLevel = rSubStart["filter_serverlevel"].u.integer;
-			if(rSubStart["filter_address"].type == json_string)
-				str_copy(FilterInfo.m_aAddress, rSubStart["filter_address"], sizeof(FilterInfo.m_aAddress));
-			if(rSubStart["filter_country"].type == json_integer)
-				FilterInfo.m_Country = rSubStart["filter_country"].u.integer;
-		}
-
-		// add filter
-		m_lFilters.add(CBrowserFilter(Type, pName, ServerBrowser()));
-		if(Type == CBrowserFilter::FILTER_STANDARD)		//	make sure the pure filter is enabled in the Teeworlds-filter
-			FilterInfo.m_SortHash |= IServerBrowser::FILTER_PURE;
-		m_lFilters[i].SetFilter(&FilterInfo);
-	}
-
-	// clean up
-	json_value_free(pJsonData);
-
-	CBrowserFilter *pSelectedFilter = GetSelectedBrowserFilter();
-	if(pSelectedFilter)
-		pSelectedFilter->Switch();
-}
-
-void CMenus::SaveFilters()
-{
-	IOHANDLE File = Storage()->OpenFile("ui_settings.json", IOFLAG_WRITE, IStorage::TYPE_SAVE);
-	if(!File)
-		return;
-
-	CJsonWriter Writer(File);
-
-	Writer.BeginObject(); // root
-
-	// settings
-	Writer.WriteAttribute("settings");
-	Writer.BeginObject();
-	{
-		Writer.WriteAttribute("sidebar_active");
-		Writer.WriteIntValue(m_SidebarActive);
-
-		Writer.WriteAttribute("sidebar_tab");
-		Writer.WriteIntValue(m_SidebarTab);
-
-		Writer.WriteAttribute("filters");
-		Writer.BeginArray();
-		for(int i = 0; i < IServerBrowser::NUM_TYPES; i++)
-			Writer.WriteIntValue(m_aSelectedFilters[i]);
-		Writer.EndArray();
-	}
-	Writer.EndObject();
-
-	// filter
-	Writer.WriteAttribute("filter");
-	Writer.BeginArray();
-	for(int i = 0; i < m_lFilters.size(); i++)
-	{
-		// part start
-		Writer.BeginObject();
-		Writer.WriteAttribute(m_lFilters[i].Name());
-		Writer.BeginObject();
-		{
-			Writer.WriteAttribute("type");
-			Writer.WriteIntValue(m_lFilters[i].Custom());
-
-			// filter setting
-			CServerFilterInfo FilterInfo;
-			m_lFilters[i].GetFilter(&FilterInfo);
-
-			Writer.WriteAttribute("settings");
-			Writer.BeginObject();
-			{
-				Writer.WriteAttribute("filter_hash");
-				Writer.WriteIntValue(FilterInfo.m_SortHash);
-
-				Writer.WriteAttribute("filter_gametype");
-				Writer.BeginObject();
-				for(unsigned j = 0; j < CServerFilterInfo::MAX_GAMETYPES && FilterInfo.m_aGametype[j][0]; ++j)
-				{
-					Writer.WriteAttribute(FilterInfo.m_aGametype[j]);
-					Writer.WriteBoolValue(FilterInfo.m_aGametypeExclusive[j]);
-				}
-				Writer.EndObject();
-
-				Writer.WriteAttribute("filter_ping");
-				Writer.WriteIntValue(FilterInfo.m_Ping);
-
-				Writer.WriteAttribute("filter_serverlevel");
-				Writer.WriteIntValue(FilterInfo.m_ServerLevel);
-
-				Writer.WriteAttribute("filter_address");
-				Writer.WriteStrValue(FilterInfo.m_aAddress);
-
-				Writer.WriteAttribute("filter_country");
-				Writer.WriteIntValue(FilterInfo.m_Country);
-			}
-			Writer.EndObject();
-		}
-		Writer.EndObject();
-		Writer.EndObject();
-	}
-	Writer.EndArray();
-
-	Writer.EndObject(); // end root
-}
-
-void CMenus::RemoveFilter(int FilterIndex)
-{
-	int Filter = m_lFilters[FilterIndex].Filter();
-	ServerBrowser()->RemoveFilter(Filter);
-	m_lFilters.remove_index(FilterIndex);
-
-	// update filter indexes
-	for(int i = 0; i < m_lFilters.size(); i++)
-	{
-		CBrowserFilter *pFilter = &m_lFilters[i];
-		if(pFilter->Filter() > Filter)
-			pFilter->SetFilterNum(pFilter->Filter()-1);
-	}
-}
-
-void CMenus::Move(bool Up, int Filter)
-{
-	// move up
-	CBrowserFilter Temp = m_lFilters[Filter];
-	if(Up)
-	{
-		if(Filter > 0)
-		{
-			m_lFilters[Filter] = m_lFilters[Filter-1];
-			m_lFilters[Filter-1] = Temp;
-		}
-	}
-	else // move down
-	{
-		if(Filter < m_lFilters.size()-1)
-		{
-			m_lFilters[Filter] = m_lFilters[Filter+1];
-			m_lFilters[Filter+1] = Temp;
-		}
-	}
-}
-
-void CMenus::InitDefaultFilters()
-{
-	bool UseDefaultFilters = !m_lFilters.size();
-	bool FilterStandard = false;
-	bool FilterFav = false;
-	bool FilterAll = false;
-	for(int i = 0; i < m_lFilters.size(); i++)
-	{
-		switch(m_lFilters[i].Custom())
-		{
-		case CBrowserFilter::FILTER_STANDARD:
-			FilterStandard = true;
-			break;
-		case CBrowserFilter::FILTER_FAVORITES:
-			FilterFav = true;
-			break;
-		case CBrowserFilter::FILTER_ALL:
-			FilterAll = true;
-		}
-	}
-	if(!FilterStandard)
-	{
-		// put it on top
-		int Pos = m_lFilters.size();
-		m_lFilters.add(CBrowserFilter(CBrowserFilter::FILTER_STANDARD, "Teeworlds", ServerBrowser()));
-		for(; Pos > 0; --Pos)
-			Move(true, Pos);
-	}
-	if(!FilterFav)
-		m_lFilters.add(CBrowserFilter(CBrowserFilter::FILTER_FAVORITES, Localize("Favorites"), ServerBrowser()));
-	if(!FilterAll)
-		m_lFilters.add(CBrowserFilter(CBrowserFilter::FILTER_ALL, Localize("All"), ServerBrowser()));
-	// expand the all filter tab by default
-	if(UseDefaultFilters)
-		m_lFilters[m_lFilters.size()-1].Switch();
-}
-
-void CMenus::SetOverlay(int Type, float x, float y, const void *pData)
-{
-	if(!m_PopupActive && m_InfoOverlay.m_Reset)
-	{
-		m_InfoOverlayActive = true;
-		m_InfoOverlay.m_Type = Type;
-		m_InfoOverlay.m_X = x;
-		m_InfoOverlay.m_Y = y;
-		m_InfoOverlay.m_pData = pData;
-		m_InfoOverlay.m_Reset = false;
-	}
-}
-
-// 1 = browser entry click, 2 = server info click
-int CMenus::DoBrowserEntry(const void *pID, CUIRect View, const CServerInfo *pEntry, const CBrowserFilter *pFilter, bool Selected, bool ShowServerInfo, CScrollRegion *pScroll)
-{
-	// logic
-	int ReturnValue = 0;
-
-	const bool Hovered = UI()->MouseHovered(&View);
-	bool Highlighted = Hovered && (!pScroll || !pScroll->IsAnimating());
-
-	if(UI()->CheckActiveItem(pID))
-	{
-		if(!UI()->MouseButton(0))
-		{
-			if(Hovered)
-				ReturnValue = 1;
-			UI()->SetActiveItem(0);
-		}
-	}
-	if(UI()->HotItem() == pID)
-	{
-		if(UI()->MouseButton(0))
-			UI()->SetActiveItem(pID);
-	}
-
-	if(Highlighted)
-	{
-		UI()->SetHotItem(pID);
-		RenderTools()->DrawRoundRect(&View, vec4(1.0f, 1.0f, 1.0f, 0.5f), 5.0f);
-	}
-	else if(Selected)
-	{
-		RenderTools()->DrawRoundRect(&View, vec4(0.8f, 0.8f, 0.8f, 0.5f), 5.0f);
-	}
-
-	const float FontSize = 12.0f;
-	const float TextAlpha = (pEntry->m_NumClients == pEntry->m_MaxClients) ? 0.5f : 1.0f;
-	vec4 TextBaseColor = vec4(1.0f, 1.0f, 1.0f, TextAlpha);
-	vec4 TextBaseOutlineColor = vec4(0.0, 0.0, 0.0, 0.3f);
-	vec4 ServerInfoTextBaseColor = vec4(1.0f, 1.0f, 1.0f, 1.0f);
-	vec4 HighlightColor = vec4(TextHighlightColor.r, TextHighlightColor.g, TextHighlightColor.b, TextAlpha);
-	if(Selected || Highlighted)
-	{
-		TextBaseColor = vec4(0.0f, 0.0f, 0.0f, TextAlpha);
-		ServerInfoTextBaseColor = vec4(0.0f, 0.0f, 0.0f, 1.0f);
-		TextBaseOutlineColor = vec4(0.8f, 0.8f, 0.8f, 0.25f);
-	}
-
-	for(int c = 0; c < NUM_BROWSER_COLS; c++)
-	{
-		CUIRect Button = ms_aBrowserCols[c].m_Rect;
-		char aTemp[64];
-		Button.x = ms_aBrowserCols[c].m_Rect.x;
-		Button.y = View.y;
-		Button.h = ms_aBrowserCols[c].m_Rect.h;
-		Button.w = ms_aBrowserCols[c].m_Rect.w;
-
-		int ID = ms_aBrowserCols[c].m_ID;
-
-		if(ID == COL_BROWSER_FLAG)
-		{
-			CUIRect Rect = Button;
-			CUIRect Icon;
-
-			Rect.VSplitLeft(Rect.h, &Icon, &Rect);
-			if(pEntry->m_Flags&IServerBrowser::FLAG_PASSWORD)
-			{
-				Icon.Margin(2.0f, &Icon);
-				DoIcon(IMAGE_BROWSEICONS, Selected ? SPRITE_BROWSE_LOCK_B : SPRITE_BROWSE_LOCK_A, &Icon);
-			}
-
-			Rect.VSplitLeft(Rect.h, &Icon, &Rect);
-			Icon.Margin(2.0f, &Icon);
-
-			DoIcon(IMAGE_LEVELICONS, pEntry->m_ServerLevel==0 ? SPRITE_LEVEL_A_ON : pEntry->m_ServerLevel==1 ? SPRITE_LEVEL_B_ON : SPRITE_LEVEL_C_ON, &Icon);
-
-			Rect.VSplitLeft(Rect.h, &Icon, &Rect);
-			Icon.Margin(2.0f, &Icon);
-			DoIcon(IMAGE_BROWSEICONS, pEntry->m_Favorite ? SPRITE_BROWSE_STAR_A : SPRITE_BROWSE_STAR_B, &Icon);
-			if(UI()->DoButtonLogic(&pEntry->m_Favorite, &Icon))
-			{
-				if(!pEntry->m_Favorite)
-					ServerBrowser()->AddFavorite(pEntry);
+				if(g_Config.m_BrSort == s_aCols[i].m_Sort)
+					g_Config.m_BrSortOrder ^= 1;
 				else
-					ServerBrowser()->RemoveFavorite(pEntry);
+					g_Config.m_BrSortOrder = 0;
+				g_Config.m_BrSort = s_aCols[i].m_Sort;
 			}
-
-			Rect.VSplitLeft(Rect.h, &Icon, &Rect);
-			if(pEntry->m_FriendState != CContactInfo::CONTACT_NO)
-			{
-				Icon.Margin(2.0f, &Icon);
-				Graphics()->TextureSet(g_pData->m_aImages[IMAGE_BROWSEICONS].m_Id);
-				Graphics()->QuadsBegin();
-				Graphics()->SetColor(1.0f, 0.75f, 1.0f, 1.0f);
-				RenderTools()->SelectSprite(Selected ? SPRITE_BROWSE_HEART_B : SPRITE_BROWSE_HEART_A);
-				IGraphics::CQuadItem QuadItem(Icon.x, Icon.y, Icon.w, Icon.h);
-				Graphics()->QuadsDrawTL(&QuadItem, 1);
-				Graphics()->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
-				Graphics()->QuadsEnd();
-			}
-		}
-		else if(ID == COL_BROWSER_NAME)
-		{
-			TextRender()->TextColor(TextBaseColor);
-			TextRender()->TextOutlineColor(TextBaseOutlineColor);
-			Button.y += 2.0f;
-			UI()->DoLabelHighlighted(&Button, pEntry->m_aName, (pEntry->m_QuickSearchHit&IServerBrowser::QUICK_SERVERNAME) ? Config()->m_BrFilterString : 0, FontSize, TextBaseColor, HighlightColor);
-		}
-		else if(ID == COL_BROWSER_MAP)
-		{
-			TextRender()->TextColor(TextBaseColor);
-			Button.y += 2.0f;
-			UI()->DoLabelHighlighted(&Button, pEntry->m_aMap, (pEntry->m_QuickSearchHit&IServerBrowser::QUICK_MAPNAME) ? Config()->m_BrFilterString : 0, FontSize, TextBaseColor, HighlightColor);
-		}
-		else if(ID == COL_BROWSER_PLAYERS)
-		{
-			TextRender()->TextColor(TextBaseColor);
-			TextRender()->TextOutlineColor(TextBaseOutlineColor);
-			CServerFilterInfo FilterInfo;
-			pFilter->GetFilter(&FilterInfo);
-
-			int Num = (FilterInfo.m_SortHash&IServerBrowser::FILTER_SPECTATORS) ? pEntry->m_NumPlayers : pEntry->m_NumClients;
-			int Max = (FilterInfo.m_SortHash&IServerBrowser::FILTER_SPECTATORS) ? pEntry->m_MaxPlayers : pEntry->m_MaxClients;
-			if(FilterInfo.m_SortHash&IServerBrowser::FILTER_SPECTATORS)
-			{
-				int SpecNum = pEntry->m_NumClients - pEntry->m_NumPlayers;
-				if(pEntry->m_MaxClients - pEntry->m_MaxPlayers < SpecNum)
-					Max -= SpecNum;
-			}
-			if(FilterInfo.m_SortHash&IServerBrowser::FILTER_BOTS)
-			{
-				Num -= pEntry->m_NumBotPlayers;
-				Max -= pEntry->m_NumBotPlayers;
-				if(!(FilterInfo.m_SortHash&IServerBrowser::FILTER_SPECTATORS))
-				{
-					Num -= pEntry->m_NumBotSpectators;
-					Max -= pEntry->m_NumBotSpectators;
-				}
-
-			}
-			static float RenderOffset = 0.0f;
-			if(RenderOffset == 0.0f)
-				RenderOffset = TextRender()->TextWidth(0, FontSize, "0", -1, -1.0f);
-
-			str_format(aTemp, sizeof(aTemp), "%d/%d", Num, Max);
-			if(Config()->m_BrFilterString[0] && (pEntry->m_QuickSearchHit&IServerBrowser::QUICK_PLAYER))
-				TextRender()->TextColor(TextHighlightColor.r, TextHighlightColor.g, TextHighlightColor.b, TextAlpha);
-			Button.y += 2.0f;
-
-			if(Num < 100)
-				Button.x += RenderOffset;
-			if(Num < 10)
-				Button.x += RenderOffset;
-			if(!Num)
-				TextRender()->TextColor(CUI::ms_TransparentTextColor);
-			UI()->DoLabel(&Button, aTemp, FontSize, CUI::ALIGN_LEFT);
-			Button.x += TextRender()->TextWidth(0, FontSize, aTemp, -1, -1.0f);
-		}
-		else if(ID == COL_BROWSER_PING)
-		{
-			int Ping = pEntry->m_Latency;
-
-			vec4 Color;
-			if(Selected || Highlighted)
-			{
-				Color = TextBaseColor;
-			}
-			else
-			{
-				vec4 StartColor;
-				vec4 EndColor;
-				float MixVal;
-				if(Ping <= 125)
-				{
-					StartColor = vec4(0.0f, 1.0f, 0.0f, TextAlpha);
-					EndColor = vec4(1.0f, 1.0f, 0.0f, TextAlpha);
-
-					MixVal = (Ping-50.0f)/75.0f;
-				}
-				else
-				{
-					StartColor = vec4(1.0f, 1.0f, 0.0f, TextAlpha);
-					EndColor = vec4(1.0f, 0.0f, 0.0f, TextAlpha);
-
-					MixVal = (Ping-125.0f)/75.0f;
-				}
-				Color = mix(StartColor, EndColor, MixVal);
-			}
-
-			str_format(aTemp, sizeof(aTemp), "%d", pEntry->m_Latency);
-			TextRender()->TextColor(Color);
-			TextRender()->TextOutlineColor(TextBaseOutlineColor);
-			Button.y += 2.0f;
-			Button.w -= 4.0f;
-			UI()->DoLabel(&Button, aTemp, FontSize, CUI::ALIGN_RIGHT);
-		}
-		else if(ID == COL_BROWSER_GAMETYPE)
-		{
-			// gametype icon
-			CUIRect Icon;
-			Button.VSplitLeft(Button.h, &Icon, &Button);
-			Icon.y -= 0.5f;
-			DoGameIcon(pEntry->m_aGameType, &Icon);
-
-			// gametype text
-			TextRender()->TextColor(TextBaseColor);
-			TextRender()->TextOutlineColor(TextBaseOutlineColor);
-			Button.y += 2.0f;
-			UI()->DoLabelHighlighted(&Button, pEntry->m_aGameType, (pEntry->m_QuickSearchHit&IServerBrowser::QUICK_GAMETYPE) ? Config()->m_BrFilterString : 0, FontSize, TextBaseColor, HighlightColor);
 		}
 	}
 
-	// show server info
-	if(ShowServerInfo)
+	RenderTools()->DrawUIRect(&View, vec4(0,0,0,0.15f), 0, 0);
+
+	CUIRect Scroll;
+	View.VSplitRight(15, &View, &Scroll);
+
+	int NumServers = ServerBrowser()->NumSortedServers();
+
+	// display important messages in the middle of the screen so no
+	// users misses it
 	{
-		View.HSplitTop(ms_aBrowserCols[0].m_Rect.h, 0, &View);
+		CUIRect MsgBox = View;
+		MsgBox.y += View.h/3;
 
-		if(ReturnValue && UI()->MouseHovered(&View))
-			ReturnValue++;
-
-		CUIRect Info, Scoreboard;
-		View.VSplitLeft(160.0f, &Info, &Scoreboard);
-		RenderDetailInfo(Info, pEntry, ServerInfoTextBaseColor, TextBaseOutlineColor);
-		RenderDetailScoreboard(Scoreboard, pEntry, 4, ServerInfoTextBaseColor, TextBaseOutlineColor);
+		if(m_ActivePage == PAGE_INTERNET && ServerBrowser()->IsRefreshingMasters())
+			UI()->DoLabelScaled(&MsgBox, Localize("Refreshing master servers"), 16.0f, 0);
+		else if(!ServerBrowser()->NumServers())
+			UI()->DoLabelScaled(&MsgBox, Localize("No servers found"), 16.0f, 0);
+		else if(ServerBrowser()->NumServers() && !NumServers)
+			UI()->DoLabelScaled(&MsgBox, Localize("No servers match your filter criteria"), 16.0f, 0);
 	}
 
-	TextRender()->TextColor(CUI::ms_DefaultTextColor);
-	TextRender()->TextOutlineColor(CUI::ms_DefaultTextOutlineColor);
+	int Num = (int)(View.h/s_aCols[0].m_Rect.h) + 1;
+	static int s_ScrollBar = 0;
+	static float s_ScrollValue = 0;
 
-	return ReturnValue;
-}
+	Scroll.HMargin(5.0f, &Scroll);
+	s_ScrollValue = DoScrollbarV(&s_ScrollBar, &Scroll, s_ScrollValue);
 
-void CMenus::RenderFilterHeader(CUIRect View, int FilterIndex)
-{
-	CBrowserFilter *pFilter = &m_lFilters[FilterIndex];
-
-	float ButtonHeight = 20.0f;
-	float Spacing = 3.0f;
-	bool Switch = false;
-
-	RenderTools()->DrawUIRect(&View, vec4(0.0f, 0.0f, 0.0f, 0.25f), CUI::CORNER_ALL, 5.0f);
-
-	CUIRect Button, EditButtons;
-	if(UI()->DoButtonLogic(pFilter, &View))
+	int ScrollNum = NumServers-Num+1;
+	if(ScrollNum > 0)
 	{
-		Switch = true; // switch later, to make sure we haven't clicked one of the filter buttons (edit...)
-	}
-	vec4 Color = UI()->MouseHovered(&View) ? vec4(1.0f, 1.0f, 1.0f, 1.0f) : vec4(0.6f, 0.6f, 0.6f, 1.0f);
-	View.VSplitLeft(20.0f, &Button, &View);
-	Button.Margin(2.0f, &Button);
-	DoIcon(IMAGE_MENUICONS, pFilter->Extended() ? SPRITE_MENU_EXPANDED : SPRITE_MENU_COLLAPSED, &Button, &Color);
-
-	// split buttons from label
-	View.VSplitLeft(Spacing, 0, &View);
-	View.VSplitRight((ButtonHeight+Spacing)*4.0f, &View, &EditButtons);
-
-	View.VSplitLeft(20.0f, 0, &View); // little space
-	View.y += 2.0f;
-	UI()->DoLabel(&View, pFilter->Name(), ButtonHeight*ms_FontmodHeight*0.8f, CUI::ALIGN_LEFT);
-
-	View.VSplitRight(20.0f, &View, 0); // little space
-	char aBuf[128];
-	str_format(aBuf, sizeof(aBuf), Localize("%d servers, %d players"), pFilter->NumSortedServers(), pFilter->NumPlayers());
-	UI()->DoLabel(&View, aBuf, ButtonHeight*ms_FontmodHeight*0.8f, CUI::ALIGN_RIGHT);
-
-	EditButtons.VSplitRight(ButtonHeight, &EditButtons, &Button);
-	Button.Margin(2.0f, &Button);
-	if(pFilter->Custom() == CBrowserFilter::FILTER_CUSTOM)
-	{
-		if(DoButton_SpriteID(&pFilter->m_DeleteButtonContainer, IMAGE_TOOLICONS, SPRITE_TOOL_X_A, false, &Button))
+		if(m_ScrollOffset)
 		{
-			m_RemoveFilterIndex = FilterIndex;
-			str_format(aBuf, sizeof(aBuf), Localize("Are you sure that you want to remove the filter '%s' from the server browser?"), pFilter->Name());
-			PopupConfirm(Localize("Remove filter"), aBuf, Localize("Yes"), Localize("No"), &CMenus::PopupConfirmRemoveFilter);
+			s_ScrollValue = (float)(m_ScrollOffset)/ScrollNum;
+			m_ScrollOffset = 0;
 		}
+		if(Input()->KeyPresses(KEY_MOUSE_WHEEL_UP) && UI()->MouseInside(&View))
+			s_ScrollValue -= 3.0f/ScrollNum;
+		if(Input()->KeyPresses(KEY_MOUSE_WHEEL_DOWN) && UI()->MouseInside(&View))
+			s_ScrollValue += 3.0f/ScrollNum;
 	}
 	else
-		DoIcon(IMAGE_TOOLICONS, SPRITE_TOOL_X_B, &Button);
+		ScrollNum = 0;
 
-	EditButtons.VSplitRight(Spacing, &EditButtons, 0);
-	EditButtons.VSplitRight(ButtonHeight, &EditButtons, &Button);
-	Button.Margin(2.0f, &Button);
-	if(FilterIndex > 0 && (pFilter->Custom() > CBrowserFilter::FILTER_ALL || m_lFilters[FilterIndex-1].Custom() != CBrowserFilter::FILTER_STANDARD))
+	if(m_SelectedIndex > -1)
 	{
-		if(DoButton_SpriteID(&pFilter->m_UpButtonContainer, IMAGE_TOOLICONS, SPRITE_TOOL_UP_A, false, &Button))
+		for(int i = 0; i < m_NumInputEvents; i++)
 		{
-			Move(true, FilterIndex);
-			Switch = false;
-		}
-	}
-	else
-		DoIcon(IMAGE_TOOLICONS, SPRITE_TOOL_UP_B, &Button);
-
-	EditButtons.VSplitRight(Spacing, &EditButtons, 0);
-	EditButtons.VSplitRight(ButtonHeight, &EditButtons, &Button);
-	Button.Margin(2.0f, &Button);
-	if(FilterIndex >= 0 && FilterIndex < m_lFilters.size()-1 && (pFilter->Custom() != CBrowserFilter::FILTER_STANDARD || m_lFilters[FilterIndex+1].Custom() > CBrowserFilter::FILTER_ALL))
-	{
-		if(DoButton_SpriteID(&pFilter->m_DownButtonContainer, IMAGE_TOOLICONS, SPRITE_TOOL_DOWN_A, false, &Button))
-		{
-			Move(false, FilterIndex);
-			Switch = false;
-		}
-	}
-	else
-		DoIcon(IMAGE_TOOLICONS, SPRITE_TOOL_DOWN_B, &Button);
-
-	if(Switch)
-	{
-		pFilter->Switch();
-		// retract the other filters
-		if(pFilter->Extended())
-		{
-			for(int i = 0; i < m_lFilters.size(); ++i)
+			int NewIndex = -1;
+			if(m_aInputEvents[i].m_Flags&IInput::FLAG_PRESS)
 			{
-				if(i != FilterIndex && m_lFilters[i].Extended())
-					m_lFilters[i].Switch();
+				if(m_aInputEvents[i].m_Key == KEY_DOWN) NewIndex = m_SelectedIndex + 1;
+				if(m_aInputEvents[i].m_Key == KEY_UP) NewIndex = m_SelectedIndex - 1;
 			}
-		}
-	}
-}
-
-void CMenus::PopupConfirmRemoveFilter()
-{
-	// remove filter
-	if(m_RemoveFilterIndex)
-	{
-		RemoveFilter(m_RemoveFilterIndex);
-	}
-}
-
-static void FormatScore(char *pBuf, int BufSize, bool TimeScore, const CServerInfo::CClient *pClient)
-{
-	if(TimeScore)
-		FormatTime(pBuf, BufSize, pClient->m_Score * 1000, 0);
-	else
-		str_format(pBuf, BufSize, "%d", pClient->m_Score);
-}
-
-void CMenus::RenderServerbrowserOverlay()
-{
-	if(!m_InfoOverlayActive)
-	{
-		m_InfoOverlay.m_Reset = true;
-		return;
-	}
-
-	const int Type = m_InfoOverlay.m_Type;
-	const float FontSize = 12.0f;
-
-	CUIRect View;
-	if(Type == CInfoOverlay::OVERLAY_HEADERINFO)
-	{
-		CBrowserFilter *pFilter = (CBrowserFilter*)m_InfoOverlay.m_pData;
-
-		// get position
-		View.x = m_InfoOverlay.m_X-100.0f;
-		View.y = m_InfoOverlay.m_Y;
-		View.w = 100.0f;
-		View.h = 30.0f;
-
-		// render background
-		RenderTools()->DrawRoundRect(&View, vec4(0.25f, 0.25f, 0.25f, 1.0f), 6.0f);
-
-		View.Margin(2.0f, &View);
-		CUIRect NumServers, NumPlayers;
-		View.HSplitMid(&NumServers, &NumPlayers);
-
-		char aBuf[128];
-		str_format(aBuf, sizeof(aBuf), "%s: %d", Localize("Servers"), pFilter->NumSortedServers());
-		UI()->DoLabel(&NumServers, aBuf, FontSize, CUI::ALIGN_CENTER);
-
-		str_format(aBuf, sizeof(aBuf), "%s: %d", Localize("Players"), pFilter->NumPlayers());
-		UI()->DoLabel(&NumPlayers, aBuf, FontSize, CUI::ALIGN_CENTER);
-	}
-	else if(Type == CInfoOverlay::OVERLAY_SERVERINFO)
-	{
-		const CServerInfo *pInfo = (CServerInfo*)m_InfoOverlay.m_pData;
-
-		// get position
-		View.x = m_InfoOverlay.m_X-210.0f;
-		View.y = m_InfoOverlay.m_Y;
-		View.w = 210.0f;
-		View.h = pInfo->m_NumClients ? 98.0f + pInfo->m_NumClients*25.0f : 72.0f;
-		if(View.y+View.h >= 590.0f)
-			View.y -= View.y+View.h - 590.0f;
-
-		// render background
-		RenderTools()->DrawRoundRect(&View, vec4(0.25f, 0.25f, 0.25f, 1.0f), 6.0f);
-
-		RenderServerbrowserServerDetail(View, pInfo);
-	}
-	else if(Type == CInfoOverlay::OVERLAY_PLAYERSINFO)
-	{
-		const CServerInfo *pInfo = (CServerInfo*)m_InfoOverlay.m_pData;
-
-		CUIRect Screen = *UI()->Screen();
-		float ButtonHeight = 20.0f;
-
-		TextRender()->TextColor(CUI::ms_HighlightTextColor);
-		TextRender()->TextOutlineColor(CUI::ms_HighlightTextOutlineColor);
-
-		if(pInfo && pInfo->m_NumClients)
-		{
-			// get position
-			View.x = m_InfoOverlay.m_X+25.0f;
-			View.y = m_InfoOverlay.m_Y;
-			View.w = 250.0f;
-			View.h = pInfo->m_NumClients*ButtonHeight;
-			if(View.x+View.w > Screen.w-5.0f)
+			if(NewIndex > -1 && NewIndex < NumServers)
 			{
-				View.y += 25.0f;
-				View.x -= View.x+View.w-Screen.w+5.0f;
-			}
-			if(View.y+View.h >= 590.0f)
-				View.y -= View.y+View.h - 590.0f;
-
-			// render background
-			RenderTools()->DrawRoundRect(&View, vec4(1.0f, 1.0f, 1.0f, 0.75f), 6.0f);
-
-			CUIRect ServerScoreBoard = View;
-			CTextCursor Cursor;
-			for (int i = 0; i < pInfo->m_NumClients; i++)
-			{
-				CUIRect Name, Clan, Score, Flag;
-				ServerScoreBoard.HSplitTop(ButtonHeight, &Name, &ServerScoreBoard);
-				if(UI()->DoButtonLogic(&pInfo->m_aClients[i], &Name))
+				//scroll
+				float IndexY = View.y - s_ScrollValue*ScrollNum*s_aCols[0].m_Rect.h + NewIndex*s_aCols[0].m_Rect.h;
+				int Scroll = View.y > IndexY ? -1 : View.y+View.h < IndexY+s_aCols[0].m_Rect.h ? 1 : 0;
+				if(Scroll)
 				{
-					if(pInfo->m_aClients[i].m_FriendState == CContactInfo::CONTACT_PLAYER)
-						m_pClient->Friends()->RemoveFriend(pInfo->m_aClients[i].m_aName, pInfo->m_aClients[i].m_aClan);
+					if(Scroll < 0)
+					{
+						int NumScrolls = (View.y-IndexY+s_aCols[0].m_Rect.h-1.0f)/s_aCols[0].m_Rect.h;
+						s_ScrollValue -= (1.0f/ScrollNum)*NumScrolls;
+					}
 					else
-						m_pClient->Friends()->AddFriend(pInfo->m_aClients[i].m_aName, pInfo->m_aClients[i].m_aClan);
-					FriendlistOnUpdate();
-					Client()->ServerBrowserUpdate();
+					{
+						int NumScrolls = (IndexY+s_aCols[0].m_Rect.h-(View.y+View.h)+s_aCols[0].m_Rect.h-1.0f)/s_aCols[0].m_Rect.h;
+						s_ScrollValue += (1.0f/ScrollNum)*NumScrolls;
+					}
 				}
 
-				vec4 BackgroundColor = pInfo->m_aClients[i].m_FriendState == CContactInfo::CONTACT_NO
-						? vec4(1.0f, 1.0f, 1.0f, (i%2+1)*0.05f)
-						: vec4(0.5f, 1.0f, 0.5f, 0.15f+(i%2+1)*0.05f);
-				RenderTools()->DrawRoundRect(&Name, BackgroundColor, 4.0f);
-				Name.VSplitLeft(5.0f, 0, &Name);
-				Name.VSplitLeft(30.0f, &Score, &Name);
-				Name.VSplitRight(34.0f, &Name, &Flag);
-				Flag.HMargin(4.0f, &Flag);
-				Name.VSplitRight(40.0f, &Name, &Clan);
+				m_SelectedIndex = NewIndex;
 
-				// score
-				if(!(pInfo->m_aClients[i].m_PlayerType&CServerInfo::CClient::PLAYERFLAG_SPEC))
+				const CServerInfo *pItem = ServerBrowser()->SortedGet(m_SelectedIndex);
+				str_copy(g_Config.m_UiServerAddress, pItem->m_aAddress, sizeof(g_Config.m_UiServerAddress));
+			}
+		}
+	}
+
+	if(s_ScrollValue < 0) s_ScrollValue = 0;
+	if(s_ScrollValue > 1) s_ScrollValue = 1;
+
+	// set clipping
+	UI()->ClipEnable(&View);
+
+	CUIRect OriginalView = View;
+	View.y -= s_ScrollValue*ScrollNum*s_aCols[0].m_Rect.h;
+
+	int NewSelected = -1;
+	int NumPlayers = 0;
+
+	m_SelectedIndex = -1;
+
+	// reset friend counter
+	for(int i = 0; i < m_lFriends.size(); m_lFriends[i++].m_NumFound = 0);
+
+	for (int i = 0; i < NumServers; i++)
+	{
+		int ItemIndex = i;
+		const CServerInfo *pItem = ServerBrowser()->SortedGet(ItemIndex);
+		NumPlayers += g_Config.m_BrFilterSpectators ? pItem->m_NumPlayers : pItem->m_NumClients;
+		CUIRect Row;
+		CUIRect SelectHitBox;
+
+		int Selected = str_comp(pItem->m_aAddress, g_Config.m_UiServerAddress) == 0; //selected_index==ItemIndex;
+
+		View.HSplitTop(17.0f, &Row, &View);
+		SelectHitBox = Row;
+
+		if(Selected)
+			m_SelectedIndex = i;
+
+		// update friend counter
+		if(pItem->m_FriendState != IFriends::FRIEND_NO)
+		{
+			for(int j = 0; j < pItem->m_NumClients; ++j)
+			{
+				if(pItem->m_aClients[j].m_FriendState != IFriends::FRIEND_NO)
 				{
-					char aTemp[16];
-					FormatScore(aTemp, sizeof(aTemp), pInfo->m_Flags&IServerBrowser::FLAG_TIMESCORE, &pInfo->m_aClients[i]);
-					TextRender()->SetCursor(&Cursor, Score.x, Score.y+(Score.h-FontSize)/4.0f, FontSize, TEXTFLAG_RENDER|TEXTFLAG_STOP_AT_END);
-					Cursor.m_LineWidth = Score.w;
-					TextRender()->TextEx(&Cursor, aTemp, -1);
+					unsigned NameHash = str_quickhash(pItem->m_aClients[j].m_aName);
+					unsigned ClanHash = str_quickhash(pItem->m_aClients[j].m_aClan);
+					for(int f = 0; f < m_lFriends.size(); ++f)
+					{
+						if(ClanHash == m_lFriends[f].m_pFriendInfo->m_ClanHash &&
+							(!m_lFriends[f].m_pFriendInfo->m_aName[0] || NameHash == m_lFriends[f].m_pFriendInfo->m_NameHash))
+						{
+							m_lFriends[f].m_NumFound++;
+							if(m_lFriends[f].m_pFriendInfo->m_aName[0])
+								break;
+						}
+					}
 				}
+			}
+		}
 
-				// name
-				Name.y += 2.0f;
-				UI()->DoLabelHighlighted(&Name, pInfo->m_aClients[i].m_aName, Config()->m_BrFilterString, FontSize, CUI::ms_DefaultTextColor, CUI::ms_HighlightTextColor);
+		// make sure that only those in view can be selected
+		if(Row.y+Row.h > OriginalView.y && Row.y < OriginalView.y+OriginalView.h)
+		{
+			if(Selected)
+			{
+				CUIRect r = Row;
+				r.Margin(1.5f, &r);
+				RenderTools()->DrawUIRect(&r, vec4(1,1,1,0.5f), CUI::CORNER_ALL, 4.0f);
+			}
 
-				// clan
-				Clan.y += 2.0f;
-				UI()->DoLabelHighlighted(&Clan, pInfo->m_aClients[i].m_aClan, Config()->m_BrFilterString, FontSize, CUI::ms_DefaultTextColor, CUI::ms_HighlightTextColor);
+			// clip the selection
+			if(SelectHitBox.y < OriginalView.y) // top
+			{
+				SelectHitBox.h -= OriginalView.y-SelectHitBox.y;
+				SelectHitBox.y = OriginalView.y;
+			}
+			else if(SelectHitBox.y+SelectHitBox.h > OriginalView.y+OriginalView.h) // bottom
+				SelectHitBox.h = OriginalView.y+OriginalView.h-SelectHitBox.y;
 
-				// flag
-				vec4 FlagColor(1.0f, 1.0f, 1.0f, 0.75f);
-				m_pClient->m_pCountryFlags->Render(pInfo->m_aClients[i].m_Country, &FlagColor, Flag.x, Flag.y, Flag.w, Flag.h);
+			if(UI()->DoButtonLogic(pItem, "", Selected, &SelectHitBox))
+			{
+				NewSelected = ItemIndex;
 			}
 		}
 		else
 		{
-			View.x = m_InfoOverlay.m_X+25.0f;
-			View.y = m_InfoOverlay.m_Y;
-			View.w = 150.0f;
-			View.h = ButtonHeight;
-			if(View.x+View.w > Screen.w-5.0f)
-			{
-				View.y += 25.0f;
-				View.x -= View.x+View.w-Screen.w+5.0f;
-			}
-			if(View.y+View.h >= 590.0f)
-				View.y -= View.y+View.h - 590.0f;
+			// reset active item, if not visible
+			if(UI()->ActiveItem() == pItem)
+				UI()->SetActiveItem(0);
 
-			// render background
-			RenderTools()->DrawRoundRect(&View, vec4(1.0f, 1.0f, 1.0f, 0.75f), 6.0f);
-
-			View.y += 2.0f;
-			UI()->DoLabel(&View, Localize("no players", "server browser message"), View.h*ms_FontmodHeight*0.8f, CUI::ALIGN_CENTER);
-		}
-
-		TextRender()->TextColor(CUI::ms_DefaultTextColor);
-		TextRender()->TextOutlineColor(CUI::ms_DefaultTextOutlineColor);
-	}
-
-	// deactivate it
-	vec2 OverlayCenter = vec2(View.x+View.w/2.0f, View.y+View.h/2.0f);
-	float MouseDistance = distance(m_MousePos, OverlayCenter);
-	float PrefMouseDistance = distance(m_PrevMousePos, OverlayCenter);
-	if(PrefMouseDistance > MouseDistance && !UI()->MouseHovered(&View))
-	{
-		m_InfoOverlayActive = false;
-		m_InfoOverlay.m_Reset = true;
-	}
-}
-
-void CMenus::RenderServerbrowserServerList(CUIRect View)
-{
-	CUIRect Headers, Status;
-
-	const float SpacingH = 2.0f;
-	const float ButtonHeight = 20.0f;
-	const float HeaderHeight = GetListHeaderHeight();
-	const float HeightFactor = GetListHeaderHeightFactor();
-
-	// background
-	RenderTools()->DrawUIRect(&View, vec4(0.0f, 0.0f, 0.0f, Config()->m_ClMenuAlpha/100.0f), (Client()->State() == IClient::STATE_OFFLINE) ? CUI::CORNER_ALL : CUI::CORNER_B|CUI::CORNER_TR, 5.0f);
-
-	// make room for scrollbar
-	{
-		CUIRect Scroll;
-		View.VSplitRight(20.0f, &View, &Scroll);
-	}
-
-	View.HSplitTop(HeaderHeight, &Headers, &View);
-	View.HSplitBottom(ButtonHeight*3.0f+SpacingH*2.0f, &View, &Status);
-
-	Headers.VSplitRight(2.f, &Headers, 0); // some margin on the right
-
-	// do layout
-	for(int i = 0; i < NUM_BROWSER_COLS; i++)
-	{
-		if(ms_aBrowserCols[i].m_Direction == -1)
-		{
-			Headers.VSplitLeft(ms_aBrowserCols[i].m_Width*HeightFactor, &ms_aBrowserCols[i].m_Rect, &Headers);
-
-			if(i+1 < NUM_BROWSER_COLS)
-			{
-				Headers.VSplitLeft(2, &ms_aBrowserCols[i].m_Spacer, &Headers);
-			}
-		}
-	}
-
-	for(int i = NUM_BROWSER_COLS-1; i >= 0; i--)
-	{
-		if(ms_aBrowserCols[i].m_Direction == 1)
-		{
-			Headers.VSplitRight(ms_aBrowserCols[i].m_Width*HeightFactor, &Headers, &ms_aBrowserCols[i].m_Rect);
-			Headers.VSplitRight(2, &Headers, &ms_aBrowserCols[i].m_Spacer);
-		}
-	}
-
-	for(int i = 0; i < NUM_BROWSER_COLS; i++)
-	{
-		if(ms_aBrowserCols[i].m_Direction == 0)
-			ms_aBrowserCols[i].m_Rect = Headers;
-	}
-
-	// do headers
-	for(int i = 0; i < NUM_BROWSER_COLS; i++)
-	{
-		if(i == COL_BROWSER_FLAG)
+			// don't render invisible items
 			continue;
+		}
 
-		if(DoButton_GridHeader(ms_aBrowserCols[i].m_Caption, ms_aBrowserCols[i].m_Caption, Config()->m_BrSort == ms_aBrowserCols[i].m_Sort, ms_aBrowserCols[i].m_Align, &ms_aBrowserCols[i].m_Rect))
+		for(int c = 0; c < NumCols; c++)
 		{
-			if(ms_aBrowserCols[i].m_Sort != -1)
+			CUIRect Button;
+			char aTemp[64];
+			Button.x = s_aCols[c].m_Rect.x;
+			Button.y = Row.y;
+			Button.h = Row.h;
+			Button.w = s_aCols[c].m_Rect.w;
+
+			int ID = s_aCols[c].m_ID;
+
+			if(ID == COL_FLAG_LOCK)
 			{
-				if(Config()->m_BrSort == ms_aBrowserCols[i].m_Sort)
-					Config()->m_BrSortOrder ^= 1;
-				else
-					Config()->m_BrSortOrder = 0;
-				Config()->m_BrSort = ms_aBrowserCols[i].m_Sort;
+				if(pItem->m_Flags & SERVER_FLAG_PASSWORD)
+					DoButton_Icon(IMAGE_BROWSEICONS, SPRITE_BROWSE_LOCK, &Button);
 			}
-			ServerBrowserSortingOnUpdate();
-		}
-	}
-
-	// list background
-	RenderTools()->DrawUIRect(&View, vec4(0.0f, 0.0f, 0.0f, 0.25f), CUI::CORNER_ALL, 5.0f);
-	{
-		int Column = COL_BROWSER_PING;
-		switch(Config()->m_BrSort)
-		{
-			case IServerBrowser::SORT_NAME:
-				Column = COL_BROWSER_NAME;
-				break;
-			case IServerBrowser::SORT_GAMETYPE:
-				Column = COL_BROWSER_GAMETYPE;
-				break;
-			case IServerBrowser::SORT_MAP:
-				Column = COL_BROWSER_MAP;
-				break;
-			case IServerBrowser::SORT_NUMPLAYERS:
-				Column = COL_BROWSER_PLAYERS;
-				break;
-		}
-
-		CUIRect Rect = View;
-		Rect.x = CMenus::ms_aBrowserCols[Column].m_Rect.x;
-		Rect.w = CMenus::ms_aBrowserCols[Column].m_Rect.w;
-		RenderTools()->DrawUIRect(&Rect, vec4(0.0f, 0.0f, 0.0f, 0.05f), CUI::CORNER_ALL, 5.0f);
-	}
-
-	// update selection based on address if it changed
-	if(ServerBrowser()->IsRefreshing())
-		m_AddressSelection |= ADDR_SELECTION_CHANGE;
-
-	const int BrowserType = ServerBrowser()->GetType();
-	int ToBeSelectedFilter = -2; // -2 to not restore, -1 to restore all filters closed
-	if(m_LastBrowserType == -1)
-		m_LastBrowserType = BrowserType;
-	else if(BrowserType != m_LastBrowserType)
-	{
-		// restore selected filter and server when changing browser page
-		m_LastBrowserType = BrowserType;
-		ToBeSelectedFilter = m_aSelectedFilters[BrowserType];
-		if(ToBeSelectedFilter != -1)
-		{
-			if(m_aSelectedServers[BrowserType] == -1)
-				m_AddressSelection |= ADDR_SELECTION_CHANGE;
-			else
-				m_AddressSelection |= ADDR_SELECTION_REVEAL | ADDR_SELECTION_UPDATE_ADDRESS;
-		}
-	}
-
-	// count all the servers and update selected filter based on UI state
-	int NumServers = 0;
-	int SelectedFilter = -1;
-	for(int i = 0; i < m_lFilters.size(); i++)
-	{
-		// restore selected filter from browser page
-		if(ToBeSelectedFilter != -2 && (ToBeSelectedFilter == i) != m_lFilters[i].Extended())
-		{
-			m_lFilters[i].Switch();
-		}
-
-		if(m_lFilters[i].Extended())
-		{
-			if(SelectedFilter == -1)
+			else if(ID == COL_FLAG_PURE)
 			{
-				SelectedFilter = i;
-			}
-			NumServers += m_lFilters[i].NumSortedServers();
-		}
-	}
-
-	if(m_aSelectedFilters[BrowserType] == -2)
-		m_aSelectedFilters[BrowserType] = SelectedFilter;
-	else if(SelectedFilter != m_aSelectedFilters[BrowserType])
-	{
-		// update stored state based on updated state of UI
-		m_aSelectedFilters[BrowserType] = SelectedFilter;
-		m_aSelectedServers[BrowserType] = -1;
-		if(SelectedFilter != -1)
-		{
-			m_AddressSelection |= ADDR_SELECTION_CHANGE;
-		}
-	}
-
-	const bool CtrlPressed = Input()->KeyIsPressed(KEY_LCTRL) || Input()->KeyIsPressed(KEY_RCTRL);
-
-	// handle arrow hotkeys
-	const int LastSelectedFilter = m_aSelectedFilters[BrowserType];
-	const int LastSelectedServer = m_aSelectedServers[BrowserType];
-	if(SelectedFilter > -1)
-	{
-		int NewFilter = SelectedFilter;
-		int ToBeSelectedServer = -1;
-
-		if(m_DownArrowPressed)
-		{
-			if(!CtrlPressed)
-			{
-				ToBeSelectedServer = m_aSelectedServers[BrowserType] < 0 ? 0 : (m_aSelectedServers[BrowserType] + 1);
-				if(ToBeSelectedServer >= m_lFilters[SelectedFilter].NumSortedServers())
-					ToBeSelectedServer = m_lFilters[SelectedFilter].NumSortedServers() - 1;
-			}
-			else if(SelectedFilter + 1 < m_lFilters.size())
-			{
-				// move to next filter
-				NewFilter = SelectedFilter + 1;
-			}
-		}
-		else if(m_UpArrowPressed)
-		{
-			if(!CtrlPressed)
-			{
-				ToBeSelectedServer = m_aSelectedServers[BrowserType] < 0 ? 0 : (m_aSelectedServers[BrowserType] - 1);
-				if(ToBeSelectedServer < 0)
-					ToBeSelectedServer = 0;
-			}
-			else if(SelectedFilter - 1 >= 0)
-			{
-				// move to previous filter
-				NewFilter = SelectedFilter - 1;
-			}
-		}
-
-		if(NewFilter != SelectedFilter)
-		{
-			m_lFilters[NewFilter].Switch();
-			m_lFilters[SelectedFilter].Switch();
-			m_aSelectedServers[BrowserType] = -1;
-			m_AddressSelection |= ADDR_SELECTION_CHANGE;
-		}
-
-		if(ToBeSelectedServer > -1 && ToBeSelectedServer < m_lFilters[NewFilter].NumSortedServers())
-		{
-			m_aSelectedFilters[BrowserType] = NewFilter;
-			if(m_aSelectedServers[BrowserType] != ToBeSelectedServer)
-			{
-				m_aSelectedServers[BrowserType] = ToBeSelectedServer;
-				m_ShowServerDetails = false; // close server details when scrolling with arrows, as this leads to flicking
-				m_AddressSelection |= ADDR_SELECTION_REVEAL;
-			}
-
-			m_AddressSelection |= ADDR_SELECTION_UPDATE_ADDRESS;
-		}
-	}
-
-	// scrollbar
-	static CScrollRegion s_ScrollRegion;
-	vec2 ScrollOffset(0, 0);
-	CScrollRegionParams ScrollParams;
-	ScrollParams.m_ClipBgColor = vec4(0,0,0,0);
-	ScrollParams.m_Flags = CScrollRegionParams::FLAG_CONTENT_STATIC_WIDTH;
-	ScrollParams.m_SliderMinHeight = 5;
-	ScrollParams.m_ScrollUnit = 60.0f; // 3 rows per scroll
-	View.w += ScrollParams.m_ScrollbarWidth;
-	s_ScrollRegion.Begin(&View, &ScrollOffset, &ScrollParams);
-	View.y += ScrollOffset.y;
-
-	const char *pAddress = GetServerBrowserAddress();
-	for(int FilterIndex = 0; FilterIndex < m_lFilters.size(); FilterIndex++)
-	{
-		CBrowserFilter *pFilter = &m_lFilters[FilterIndex];
-
-		// filter header
-		CUIRect Header;
-		View.HSplitTop(20.0f, &Header, &View);
-		s_ScrollRegion.AddRect(Header);
-
-		// render header
-		RenderFilterHeader(Header, FilterIndex);
-
-		if(pFilter->Extended())
-		{
-			for (int ServerIndex = 0; ServerIndex < pFilter->NumSortedServers(); ServerIndex++)
-			{
-				const CServerInfo *pItem = pFilter->SortedGet(ServerIndex);
-
-				// select server if address changed and match found
-				bool IsSelected = m_aSelectedFilters[BrowserType] == FilterIndex && m_aSelectedServers[BrowserType] == ServerIndex;
-				if(m_AddressSelection&ADDR_SELECTION_CHANGE)
+				if(	str_comp(pItem->m_aGameType, "DM") == 0 ||
+					str_comp(pItem->m_aGameType, "TDM") == 0 ||
+					str_comp(pItem->m_aGameType, "CTF") == 0)
 				{
-					if (!str_comp(pItem->m_aAddress, pAddress))
+					// pure server
+				}
+				else
+				{
+					// unpure
+					DoButton_Icon(IMAGE_BROWSEICONS, SPRITE_BROWSE_UNPURE, &Button);
+				}
+			}
+			else if(ID == COL_FLAG_FAV)
+			{
+				if(pItem->m_Favorite)
+					DoButton_Icon(IMAGE_BROWSEICONS, SPRITE_BROWSE_HEART, &Button);
+			}
+			else if(ID == COL_NAME)
+			{
+				CTextCursor Cursor;
+				TextRender()->SetCursor(&Cursor, Button.x, Button.y, 12.0f * UI()->Scale(), TEXTFLAG_RENDER|TEXTFLAG_STOP_AT_END);
+				Cursor.m_LineWidth = Button.w;
+
+				if(g_Config.m_BrFilterString[0] && (pItem->m_QuickSearchHit&IServerBrowser::QUICK_SERVERNAME))
+				{
+					// highlight the parts that matches
+					const char *pStr = str_find_nocase(pItem->m_aName, g_Config.m_BrFilterString);
+					if(pStr)
 					{
-						if(!IsSelected)
-						{
-							m_ShowServerDetails = true;
-							m_aSelectedFilters[BrowserType] = FilterIndex;
-							m_aSelectedServers[BrowserType] = ServerIndex;
-							IsSelected = true;
-						}
-						m_AddressSelection &= ~(ADDR_SELECTION_CHANGE|ADDR_SELECTION_RESET_SERVER_IF_NOT_FOUND);
+						TextRender()->TextEx(&Cursor, pItem->m_aName, (int)(pStr-pItem->m_aName));
+						TextRender()->TextColor(0.4f,0.4f,1.0f,1);
+						TextRender()->TextEx(&Cursor, pStr, str_length(g_Config.m_BrFilterString));
+						TextRender()->TextColor(1,1,1,1);
+						TextRender()->TextEx(&Cursor, pStr+str_length(g_Config.m_BrFilterString), -1);
 					}
 					else
-					{
-						IsSelected = false;
-					}
+						TextRender()->TextEx(&Cursor, pItem->m_aName, -1);
 				}
-
-				const bool ShowServerInfo = !m_SidebarActive && m_ShowServerDetails && IsSelected;
-				const float ItemHeight = HeaderHeight * (ShowServerInfo ? 6.0f : 1.0f);
-
-				CUIRect Row;
-				View.HSplitTop(ItemHeight, &Row, &View);
-				s_ScrollRegion.AddRect(Row);
-
-				if(IsSelected && (m_AddressSelection&ADDR_SELECTION_REVEAL)) // new selection (hotkeys or address input)
-				{
-					s_ScrollRegion.ScrollHere();
-					m_AddressSelection &= ~ADDR_SELECTION_REVEAL;
-				}
-				else if(s_ScrollRegion.IsRectClipped(Row))
-				{
-					// only those in the view are rendered and can be selected
-					continue;
-				}
-
-				// Prevent flickering entry background and text by drawing it as selected for one more frame after the selection has changed
-				const bool WasSelected = LastSelectedFilter >= 0 && LastSelectedServer >= 0 && FilterIndex == LastSelectedFilter && ServerIndex == LastSelectedServer;
-				if(int ReturnValue = DoBrowserEntry(pFilter->ID(ServerIndex), Row, pItem, pFilter, IsSelected || WasSelected, ShowServerInfo, &s_ScrollRegion))
-				{
-					m_ShowServerDetails = !m_ShowServerDetails || ReturnValue == 2 || m_aSelectedServers[BrowserType] != ServerIndex; // click twice on line => fold server details
-					m_aSelectedFilters[BrowserType] = FilterIndex;
-					m_aSelectedServers[BrowserType] = ServerIndex;
-					m_AddressSelection &= ~(ADDR_SELECTION_CHANGE|ADDR_SELECTION_RESET_SERVER_IF_NOT_FOUND);
-					if(Config()->m_UiAutoswitchInfotab)
-						m_SidebarTab = SIDEBAR_TAB_INFO;
-					UpdateServerBrowserAddress(); // update now instead of using flag because of connect
-					if(Input()->MouseDoubleClick())
-						Client()->Connect(GetServerBrowserAddress());
-				}
+				else
+					TextRender()->TextEx(&Cursor, pItem->m_aName, -1);
 			}
-
-			if((m_AddressSelection&ADDR_SELECTION_CHANGE) && (m_AddressSelection&ADDR_SELECTION_RESET_SERVER_IF_NOT_FOUND))
+			else if(ID == COL_MAP)
 			{
-				m_aSelectedServers[BrowserType] = -1;
-				m_AddressSelection &= ~(ADDR_SELECTION_CHANGE|ADDR_SELECTION_RESET_SERVER_IF_NOT_FOUND);
+				CTextCursor Cursor;
+				TextRender()->SetCursor(&Cursor, Button.x, Button.y, 12.0f * UI()->Scale(), TEXTFLAG_RENDER|TEXTFLAG_STOP_AT_END);
+				Cursor.m_LineWidth = Button.w;
+
+				if(g_Config.m_BrFilterString[0] && (pItem->m_QuickSearchHit&IServerBrowser::QUICK_MAPNAME))
+				{
+					// highlight the parts that matches
+					const char *pStr = str_find_nocase(pItem->m_aMap, g_Config.m_BrFilterString);
+					if(pStr)
+					{
+						TextRender()->TextEx(&Cursor, pItem->m_aMap, (int)(pStr-pItem->m_aMap));
+						TextRender()->TextColor(0.4f,0.4f,1.0f,1);
+						TextRender()->TextEx(&Cursor, pStr, str_length(g_Config.m_BrFilterString));
+						TextRender()->TextColor(1,1,1,1);
+						TextRender()->TextEx(&Cursor, pStr+str_length(g_Config.m_BrFilterString), -1);
+					}
+					else
+						TextRender()->TextEx(&Cursor, pItem->m_aMap, -1);
+				}
+				else
+					TextRender()->TextEx(&Cursor, pItem->m_aMap, -1);
 			}
-		}
+			else if(ID == COL_PLAYERS)
+			{
+				CUIRect Icon;
+				Button.VMargin(4.0f, &Button);
+				if(pItem->m_FriendState != IFriends::FRIEND_NO)
+				{
+					Button.VSplitLeft(Button.h, &Icon, &Button);
+					Icon.Margin(2.0f, &Icon);
+					DoButton_Icon(IMAGE_BROWSEICONS, SPRITE_BROWSE_HEART, &Icon);
+				}
 
-		if(FilterIndex < m_lFilters.size()-1)
-		{
-			CUIRect Space;
-			View.HSplitTop(SpacingH, &Space, &View);
-			s_ScrollRegion.AddRect(Space);
+				if(g_Config.m_BrFilterSpectators)
+					str_format(aTemp, sizeof(aTemp), "%i/%i", pItem->m_NumPlayers, pItem->m_MaxPlayers);
+				else
+					str_format(aTemp, sizeof(aTemp), "%i/%i", pItem->m_NumClients, pItem->m_MaxClients);
+				if(g_Config.m_BrFilterString[0] && (pItem->m_QuickSearchHit&IServerBrowser::QUICK_PLAYER))
+					TextRender()->TextColor(0.4f,0.4f,1.0f,1);
+				UI()->DoLabelScaled(&Button, aTemp, 12.0f, 1);
+				TextRender()->TextColor(1,1,1,1);
+			}
+			else if(ID == COL_PING)
+			{
+				str_format(aTemp, sizeof(aTemp), "%i", pItem->m_Latency);
+				UI()->DoLabelScaled(&Button, aTemp, 12.0f, 1);
+			}
+			else if(ID == COL_VERSION)
+			{
+				const char *pVersion = pItem->m_aVersion;
+				UI()->DoLabelScaled(&Button, pVersion, 12.0f, 1);
+			}
+			else if(ID == COL_GAMETYPE)
+			{
+				CTextCursor Cursor;
+				TextRender()->SetCursor(&Cursor, Button.x, Button.y, 12.0f*UI()->Scale(), TEXTFLAG_RENDER|TEXTFLAG_STOP_AT_END);
+				Cursor.m_LineWidth = Button.w;
+				TextRender()->TextEx(&Cursor, pItem->m_aGameType, -1);
+			}
+
 		}
 	}
 
-	if(m_AddressSelection&ADDR_SELECTION_UPDATE_ADDRESS)
+	UI()->ClipDisable();
+
+	if(NewSelected != -1)
 	{
-		UpdateServerBrowserAddress();
-		m_AddressSelection &= ~ADDR_SELECTION_UPDATE_ADDRESS;
+		// select the new server
+		const CServerInfo *pItem = ServerBrowser()->SortedGet(NewSelected);
+		str_copy(g_Config.m_UiServerAddress, pItem->m_aAddress, sizeof(g_Config.m_UiServerAddress));
+		if(Input()->MouseDoubleClick())
+			Client()->Connect(g_Config.m_UiServerAddress);
 	}
 
-	// display important messages in the middle of the screen so no user misses it
-	if(!NumServers)
-	{
-		CUIRect MsgBox = View;
-		if(MsgBox.h < 50.0f)
-			MsgBox.h = 50.0f;
-		s_ScrollRegion.AddRect(MsgBox);
-		if(!s_ScrollRegion.IsRectClipped(MsgBox))
-		{
-			const char *pImportantMessage;
-			if(m_ActivePage == PAGE_INTERNET && ServerBrowser()->IsRefreshingMasters())
-				pImportantMessage = Localize("Refreshing master servers");
-			else if(SelectedFilter == -1)
-				pImportantMessage = Localize("No filter category is selected");
-			else if(ServerBrowser()->IsRefreshing())
-				pImportantMessage = Localize("Fetching server info");
-			else if(!ServerBrowser()->NumServers())
-				pImportantMessage = Localize("No servers found");
-			else
-				pImportantMessage = Localize("No servers match your filter criteria");
+	RenderTools()->DrawUIRect(&Status, vec4(1,1,1,0.25f), CUI::CORNER_B, 5.0f);
+	Status.Margin(5.0f, &Status);
 
-			MsgBox.y += MsgBox.h/3.0f;
-			UI()->DoLabel(&MsgBox, pImportantMessage, 16.0f, CUI::ALIGN_CENTER);
-		}
-	}
-
-	s_ScrollRegion.End();
-
-	// bottom
-	float SpacingW = 3.0f;
-	float ButtonWidth = (Status.w/6.0f)-(SpacingW*5.0)/6.0f;
-	float FontSize = ButtonHeight*ms_FontmodHeight*0.8f;
-
-	// cut view
-	CUIRect Left, Label, EditBox, Button;
-	Status.VSplitLeft(ButtonWidth*3.5f+SpacingH*2.0f, &Left, &Status);
-
-	// render quick search and host address
-	Left.HSplitTop(((ButtonHeight*3.0f+SpacingH*2.0f)-(ButtonHeight*2.0f+SpacingH))/2.0f, 0, &Left);
-	Left.HSplitTop(ButtonHeight, &Label, &Left);
-	Label.VSplitLeft(2.0f, 0, &Label);
-	Label.VSplitRight(ButtonWidth*2.0f+SpacingH, &Label, &EditBox);
-	Label.y += 2.0f;
-	UI()->DoLabel(&Label, Localize("Search:"), FontSize, CUI::ALIGN_LEFT);
-	EditBox.VSplitRight(EditBox.h, &EditBox, &Button);
-	static float s_ClearOffset = 0.0f;
-	if(DoEditBox(&Config()->m_BrFilterString, &EditBox, Config()->m_BrFilterString, sizeof(Config()->m_BrFilterString), FontSize, &s_ClearOffset, false, CUI::CORNER_ALL))
-	{
+	// render quick search
+	CUIRect QuickSearch, Button;
+	Status.VSplitLeft(240.0f, &QuickSearch, &Status);
+	const char *pLabel = Localize("Quick search:");
+	UI()->DoLabelScaled(&QuickSearch, pLabel, 12.0f, -1);
+	float w = TextRender()->TextWidth(0, 12.0f, pLabel, -1);
+	QuickSearch.VSplitLeft(w, 0, &QuickSearch);
+	QuickSearch.VSplitLeft(5.0f, 0, &QuickSearch);
+	QuickSearch.VSplitLeft(240.0f-w-22.0f, &QuickSearch, &Button);
+	static float Offset = 0.0f;
+	if(DoEditBox(&g_Config.m_BrFilterString, &QuickSearch, g_Config.m_BrFilterString, sizeof(g_Config.m_BrFilterString), 12.0f, &Offset, false, CUI::CORNER_L))
 		Client()->ServerBrowserUpdate();
-		ServerBrowserFilterOnUpdate();
-	}
 
 	// clear button
 	{
-		static CButtonContainer s_ClearButton;
-		if(DoButton_SpriteID(&s_ClearButton, IMAGE_TOOLICONS, SPRITE_TOOL_X_A, false, &Button, CUI::CORNER_ALL, 5.0f, true))
+		static int s_ClearButton = 0;
+		RenderTools()->DrawUIRect(&Button, vec4(1,1,1,0.33f)*ButtonColorMul(&s_ClearButton), CUI::CORNER_R, 3.0f);
+		UI()->DoLabel(&Button, "x", Button.h*ms_FontmodHeight, 0);
+		if(UI()->DoButtonLogic(&s_ClearButton, "x", 0, &Button))
 		{
-			Config()->m_BrFilterString[0] = 0;
-			UI()->SetActiveItem(&Config()->m_BrFilterString);
+			g_Config.m_BrFilterString[0] = 0;
+			UI()->SetActiveItem(&g_Config.m_BrFilterString);
 			Client()->ServerBrowserUpdate();
-		}
-	}
-
-	Left.HSplitTop(SpacingH, 0, &Left);
-	Left.HSplitTop(ButtonHeight, &Label, 0);
-	Label.VSplitLeft(2.0f, 0, &Label);
-	Label.VSplitRight(ButtonWidth*2.0f+SpacingH, &Label, &EditBox);
-	Label.y += 2.0f;
-	UI()->DoLabel(&Label, Localize("Host address:"), FontSize, CUI::ALIGN_LEFT);
-
-	if(BrowserType == IServerBrowser::TYPE_INTERNET)
-	{
-		static float s_InternetAddressOffset = 0.0f;
-		if(DoEditBox(&Config()->m_UiServerAddress, &EditBox, Config()->m_UiServerAddress, sizeof(Config()->m_UiServerAddress), FontSize, &s_InternetAddressOffset, false, CUI::CORNER_ALL))
-		{
-			m_AddressSelection |= ADDR_SELECTION_CHANGE | ADDR_SELECTION_RESET_SERVER_IF_NOT_FOUND | ADDR_SELECTION_REVEAL;
-		}
-	}
-	else if(BrowserType == IServerBrowser::TYPE_LAN)
-	{
-		static float s_LanAddressOffset = 0.0f;
-		if(DoEditBox(&Config()->m_UiServerAddressLan, &EditBox, Config()->m_UiServerAddressLan, sizeof(Config()->m_UiServerAddressLan), FontSize, &s_LanAddressOffset, false, CUI::CORNER_ALL))
-		{
-			m_AddressSelection |= ADDR_SELECTION_CHANGE | ADDR_SELECTION_RESET_SERVER_IF_NOT_FOUND | ADDR_SELECTION_REVEAL;
 		}
 	}
 
 	// render status
-	if(ServerBrowser()->IsRefreshing() && m_ActivePage != PAGE_LAN)
-	{
-		char aBuf[128];
-		Status.HSplitTop(ButtonHeight + SpacingH, 0, &Status);
+	char aBuf[128];
+	if(ServerBrowser()->IsRefreshing())
 		str_format(aBuf, sizeof(aBuf), Localize("%d%% loaded"), ServerBrowser()->LoadingProgression());
-		Status.y += 2.0f;
-		UI()->DoLabel(&Status, aBuf, 14.0f, CUI::ALIGN_CENTER);
-	}
 	else
-	{
-		// todo: move this to a helper function
-		static float RenderOffset = 0.0f;
-		if(RenderOffset == 0.0f)
-			RenderOffset = TextRender()->TextWidth(0, FontSize, "0", -1, -1.0f);
-
-		float OffsetServer = 0.0f, OffsetPlayer = 0.0f;
-		int Num = ServerBrowser()->NumServers();
-		if(Num < 1000)
-			OffsetServer += RenderOffset;
-		if(Num < 100)
-			OffsetServer += RenderOffset;
-		if(Num < 10)
-			OffsetServer += RenderOffset;
-		int NumPlayers = ServerBrowser()->NumClients();;
-		if(NumPlayers < 1000)
-			OffsetPlayer += RenderOffset;
-		if(NumPlayers < 100)
-			OffsetPlayer += RenderOffset;
-		if(NumPlayers < 10)
-			OffsetPlayer += RenderOffset;
-
-		char aBuf[128];
-		Status.VSplitLeft(20.0f, 0, &Status);
-		Status.HSplitTop(ButtonHeight/1.5f, 0, &Status);
-		Status.HSplitTop(ButtonHeight, &Label, &Status);
-		str_format(aBuf, sizeof(aBuf), Localize("%d servers"), ServerBrowser()->NumServers());
-		Label.y += 2.0f;
-		Label.x += OffsetServer;
-		UI()->DoLabel(&Label, aBuf, 14.0f, CUI::ALIGN_LEFT);
-
-		Status.HSplitTop(SpacingH, 0, &Status);
-		Status.HSplitTop(ButtonHeight, &Label, 0);
-		str_format(aBuf, sizeof(aBuf), Localize("%d players"), NumPlayers);
-		Label.y += 2.0f;
-		Label.x += OffsetPlayer;
-		UI()->DoLabel(&Label, aBuf, 14.0f, CUI::ALIGN_LEFT);
-	}
+		str_format(aBuf, sizeof(aBuf), Localize("%d of %d servers, %d players"), ServerBrowser()->NumSortedServers(), ServerBrowser()->NumServers(), NumPlayers);
+	Status.VSplitRight(TextRender()->TextWidth(0, 14.0f, aBuf, -1), 0, &Status);
+	UI()->DoLabelScaled(&Status, aBuf, 14.0f, -1);
 }
 
-void CMenus::RenderServerbrowserSidebar(CUIRect View)
+void CMenus::RenderServerbrowserFilters(CUIRect View)
 {
-	CUIRect Header, Button;
-
-	// background
-	RenderTools()->DrawUIRect(&View, vec4(0.0f, 0.0f, 0.0f, Config()->m_ClMenuAlpha/100.0f), CUI::CORNER_ALL, 5.0f);
-
-	// handle Tab key
-	if(m_TabPressed)
-	{
-		if(Input()->KeyIsPressed(KEY_LSHIFT) || Input()->KeyIsPressed(KEY_RSHIFT))
-		{
-			m_SidebarTab--;
-			if(m_SidebarTab < SIDEBAR_TAB_INFO) m_SidebarTab = NUM_SIDEBAR_TABS-1;
-		}
-		else
-			m_SidebarTab = (m_SidebarTab+1)%NUM_SIDEBAR_TABS;
-	}
-
-	// header
-	View.HSplitTop(GetListHeaderHeight(), &Header, &View);
-	float Width = Header.w;
-	Header.VSplitLeft(Width*0.30f, &Button, &Header);
-	static CButtonContainer s_TabInfo;
-	if(DoButton_SpriteID(&s_TabInfo, IMAGE_SIDEBARICONS, m_SidebarTab != SIDEBAR_TAB_INFO ? SPRITE_SIDEBAR_INFO_A : SPRITE_SIDEBAR_INFO_B, m_SidebarTab == SIDEBAR_TAB_INFO, &Button, CUI::CORNER_TL, 5.0f, true))
-	{
-		m_SidebarTab = SIDEBAR_TAB_INFO;
-	}
-	Header.VSplitLeft(Width*0.30f, &Button, &Header);
-	static CButtonContainer s_TabFilter;
-	if(DoButton_SpriteID(&s_TabFilter, IMAGE_SIDEBARICONS, m_SidebarTab != SIDEBAR_TAB_FILTER ? SPRITE_SIDEBAR_FILTER_A : SPRITE_SIDEBAR_FILTER_B, m_SidebarTab == SIDEBAR_TAB_FILTER, &Button, 0, 0.0f, true))
-	{
-		m_SidebarTab = SIDEBAR_TAB_FILTER;
-	}
-	static CButtonContainer s_TabFriends;
-	if(DoButton_SpriteID(&s_TabFriends, IMAGE_SIDEBARICONS, m_SidebarTab != SIDEBAR_TAB_FRIEND ? SPRITE_SIDEBAR_FRIEND_A : SPRITE_SIDEBAR_FRIEND_B, m_SidebarTab == SIDEBAR_TAB_FRIEND, &Header, CUI::CORNER_TR, 5.0f, true))
-	{
-		m_SidebarTab = SIDEBAR_TAB_FRIEND;
-	}
-
-	// tabs
-	switch(m_SidebarTab)
-	{
-	case SIDEBAR_TAB_INFO:
-		RenderServerbrowserInfoTab(View);
-		break;
-	case SIDEBAR_TAB_FILTER:
-		RenderServerbrowserFilterTab(View);
-		break;
-	case SIDEBAR_TAB_FRIEND:
-		RenderServerbrowserFriendTab(View);
-	}
-}
-
-void CMenus::RenderServerbrowserFriendTab(CUIRect View)
-{
-	CUIRect Button, Icon, Label, Rect;
-	CUIRect BottomArea;
-	const float FontSize = 10.0f;
-	static bool s_ListExtended[NUM_FRIEND_TYPES] = { 1, 1, 0 };
-	static vec3 s_ListColor[NUM_FRIEND_TYPES] = { vec3(0.5f, 1.0f, 0.5f), vec3(0.4f, 0.4f, 1.0f), vec3(1.0f, 0.5f, 0.5f) };
-	const float HeaderHeight = GetListHeaderHeight();
-	const float SpacingH = 2.0f;
-
-	View.HSplitBottom(3*HeaderHeight+2*SpacingH, &View, &BottomArea);
-
-	// calculate friends
-	// todo: optimize this
-	m_pDeleteFriend = 0;
-	m_lFriendList[FRIEND_PLAYER_ON].clear();
-	m_lFriendList[FRIEND_CLAN_ON].clear();
-	m_lFriendList[FRIEND_OFF].clear();
-	for(int f = 0; f < m_pClient->Friends()->NumFriends(); ++f)
-	{
-		const CContactInfo *pFriendInfo = m_pClient->Friends()->GetFriend(f);
-		CFriendItem FriendItem;
-		FriendItem.m_pServerInfo = 0;
-		str_copy(FriendItem.m_aName, pFriendInfo->m_aName, sizeof(FriendItem.m_aName));
-		str_copy(FriendItem.m_aClan, pFriendInfo->m_aClan, sizeof(FriendItem.m_aClan));
-		FriendItem.m_FriendState = pFriendInfo->m_aName[0] ? CContactInfo::CONTACT_PLAYER : CContactInfo::CONTACT_CLAN;
-		FriendItem.m_IsPlayer = false;
-		m_lFriendList[FRIEND_OFF].add(FriendItem);
-	}
-
-	for(int ServerIndex = 0; ServerIndex < ServerBrowser()->NumServers(); ++ServerIndex)
-	{
-		const CServerInfo *pEntry = ServerBrowser()->Get(ServerIndex);
-		if(pEntry->m_FriendState == CContactInfo::CONTACT_NO)
-			continue;
-
-		for(int j = 0; j < pEntry->m_NumClients; ++j)
-		{
-			if(pEntry->m_aClients[j].m_FriendState == CContactInfo::CONTACT_NO)
-				continue;
-
-			CFriendItem FriendItem;
-			FriendItem.m_pServerInfo = pEntry;
-			str_copy(FriendItem.m_aName, pEntry->m_aClients[j].m_aName, sizeof(FriendItem.m_aName));
-			str_copy(FriendItem.m_aClan, pEntry->m_aClients[j].m_aClan, sizeof(FriendItem.m_aClan));
-			FriendItem.m_FriendState = pEntry->m_aClients[j].m_FriendState;
-			FriendItem.m_IsPlayer = !(pEntry->m_aClients[j].m_PlayerType&CServerInfo::CClient::PLAYERFLAG_SPEC);
-
-			m_lFriendList[pEntry->m_aClients[j].m_FriendState == CContactInfo::CONTACT_PLAYER ? FRIEND_PLAYER_ON : FRIEND_CLAN_ON].add(FriendItem);
-
-			for(int f = 0; f < m_lFriendList[FRIEND_OFF].size(); ++f)
-			{
-				if((!m_lFriendList[FRIEND_OFF][f].m_aName[0] || !str_comp(m_lFriendList[FRIEND_OFF][f].m_aName, pEntry->m_aClients[j].m_aName))
-					&& !str_comp(m_lFriendList[FRIEND_OFF][f].m_aClan, pEntry->m_aClients[j].m_aClan))
-				{
-					m_lFriendList[FRIEND_OFF].remove_index(f--);
-				}
-			}
-		}
-	}
-
-	// scrollbar
-	static CScrollRegion s_ScrollRegion;
-	vec2 ScrollOffset(0, 0);
-	CScrollRegionParams ScrollParams;
-	ScrollParams.m_ClipBgColor = vec4(0,0,0,0);
-	ScrollParams.m_ScrollbarBgColor = vec4(0,0,0,0);
-	ScrollParams.m_ScrollbarWidth = 14;
-	ScrollParams.m_ScrollbarMargin = 5;
-	ScrollParams.m_ScrollUnit = 40.0f; // various sized content, 40 units per scroll
-	s_ScrollRegion.Begin(&View, &ScrollOffset, &ScrollParams);
-	View.y += ScrollOffset.y;
-
-	// show lists
-	// only ~10 buttons will be displayed at once, a sliding window of 20 buttons ought to be enough
-	static CButtonContainer s_FriendButtons[20];
-	int ButtonId = 0;
-	for(int i = 0; i < NUM_FRIEND_TYPES; ++i)
-	{
-		CUIRect Header;
-		char aBuf[64] = { 0 };
-		View.HSplitTop(HeaderHeight, &Header, &View);
-		s_ScrollRegion.AddRect(Header);
-		if(s_ListExtended[i])
-		{
-			// entries
-			for(int f = 0; f < m_lFriendList[i].size(); ++f, ++ButtonId)
-			{
-				View.HSplitTop((i == FRIEND_OFF ? 8.0f : 20.0f) + HeaderHeight, &Rect, &View);
-				s_ScrollRegion.AddRect(Rect);
-				if(f < m_lFriendList[i].size()-1)
-				{
-					CUIRect Space;
-					View.HSplitTop(SpacingH, &Space, &View);
-					s_ScrollRegion.AddRect(Space);
-				}
-				if(s_ScrollRegion.IsRectClipped(Rect))
-					continue;
-
-				const bool Inside = UI()->MouseHovered(&Rect);
-				bool ButtonResult = UI()->DoButtonLogic(&(s_FriendButtons[ButtonId%20]), &Rect);
-				RenderTools()->DrawUIRect(&Rect, vec4(s_ListColor[i].r, s_ListColor[i].g, s_ListColor[i].b, Inside ? 0.5f : 0.3f), CUI::CORNER_ALL, 5.0f);
-				Rect.Margin(2.0f, &Rect);
-				Rect.VSplitRight(50.0f, &Rect, &Icon);
-
-				Rect.HSplitTop(20.0f, &Button, 0);
-				// name
-				Rect.HSplitTop(10.0f, &Button, &Rect);
-				Button.VSplitLeft(2.0f, 0, &Button);
-				UI()->DoLabel(&Button, m_lFriendList[i][f].m_aName, FontSize - 2, CUI::ALIGN_LEFT);
-				// clan
-				Rect.HSplitTop(10.0f, &Button, &Rect);
-				Button.VSplitLeft(2.0f, 0, &Button);
-				UI()->DoLabel(&Button, m_lFriendList[i][f].m_aClan, FontSize - 2, CUI::ALIGN_LEFT);
-				// info
-				if(m_lFriendList[i][f].m_pServerInfo)
-				{
-					Rect.HSplitTop(HeaderHeight, &Button, &Rect);
-					Button.VSplitLeft(2.0f, 0, &Button);
-					if(m_lFriendList[i][f].m_IsPlayer)
-						str_format(aBuf, sizeof(aBuf), Localize("Playing '%s' on '%s'", "Playing '(gametype)' on '(map)'"), m_lFriendList[i][f].m_pServerInfo->m_aGameType, m_lFriendList[i][f].m_pServerInfo->m_aMap);
-					else
-						str_format(aBuf, sizeof(aBuf), Localize("Watching '%s' on '%s'", "Watching '(gametype)' on '(map)'"), m_lFriendList[i][f].m_pServerInfo->m_aGameType, m_lFriendList[i][f].m_pServerInfo->m_aMap);
-					Button.HMargin(2.0f, &Button);
-					UI()->DoLabel(&Button, aBuf, FontSize - 2, CUI::ALIGN_LEFT);
-				}
-				// delete button
-				Icon.HSplitTop(14.0f, &Rect, 0);
-				Rect.VSplitRight(12.0f, 0, &Icon);
-				Icon.HMargin((Icon.h - Icon.w) / 2, &Icon);
-				DoIcon(IMAGE_TOOLICONS, UI()->MouseHovered(&Icon) ? SPRITE_TOOL_X_A : SPRITE_TOOL_X_B, &Icon);
-				if(UI()->DoButtonLogic(&m_lFriendList[i][f], &Icon))
-				{
-					m_pDeleteFriend = &m_lFriendList[i][f];
-					ButtonResult = false;
-				}
-				// handle click and double click on item
-				if(ButtonResult && m_lFriendList[i][f].m_pServerInfo)
-				{
-					SetServerBrowserAddress(m_lFriendList[i][f].m_pServerInfo->m_aAddress);
-					m_AddressSelection |= ADDR_SELECTION_CHANGE | ADDR_SELECTION_RESET_SERVER_IF_NOT_FOUND | ADDR_SELECTION_REVEAL;
-					if(Input()->MouseDoubleClick())
-					{
-						Client()->Connect(GetServerBrowserAddress());
-					}
-				}
-			}
-		}
-
-		{
-			CUIRect Space;
-			View.HSplitTop(SpacingH, &Space, &View);
-			s_ScrollRegion.AddRect(Space);
-		}
-
-		// header
-		RenderTools()->DrawUIRect(&Header, vec4(0.0f, 0.0f, 0.0f, 0.25f), CUI::CORNER_ALL, 5.0f);
-		Header.VSplitLeft(Header.h, &Icon, &Label);
-		vec4 Color = UI()->MouseHovered(&Header) ? vec4(1.0f, 1.0f, 1.0f, 1.0f) : vec4(0.6f, 0.6f, 0.6f, 1.0f);
-		DoIcon(IMAGE_MENUICONS, s_ListExtended[i] ? SPRITE_MENU_EXPANDED : SPRITE_MENU_COLLAPSED, &Icon, &Color);
-		int ListSize = m_lFriendList[i].size();
-		switch(i)
-		{
-		case 0: str_format(aBuf, sizeof(aBuf), Localize("Online players (%d)"), ListSize); break;
-		case 1: str_format(aBuf, sizeof(aBuf), Localize("Online clanmates (%d)"), ListSize); break;
-		case 2: str_format(aBuf, sizeof(aBuf), Localize("Offline (%d)", "friends (server browser)"), ListSize); break;
-		}
-		Label.HMargin(2.0f, &Label);
-		UI()->DoLabel(&Label, aBuf, FontSize, CUI::ALIGN_LEFT);
-		static int s_HeaderButton[NUM_FRIEND_TYPES] = { 0 };
-		if(UI()->DoButtonLogic(&s_HeaderButton[i], &Header))
-		{
-			s_ListExtended[i] ^= 1;
-		}
-	}
-	s_ScrollRegion.End();
-
-	// add friend
-	BottomArea.HSplitTop(HeaderHeight, &Button, &BottomArea);
-	BottomArea.HSplitTop(SpacingH, 0, &BottomArea);
-	Button.VSplitLeft(50.0f, &Label, &Button);
-	UI()->DoLabel(&Label, Localize("Name"), FontSize, CUI::ALIGN_LEFT);
-	static char s_aName[MAX_NAME_LENGTH] = { 0 };
-	static float s_OffsetName = 0.0f;
-	DoEditBox(&s_aName, &Button, s_aName, sizeof(s_aName), Button.h*ms_FontmodHeight*0.8f, &s_OffsetName);
-
-	BottomArea.HSplitTop(HeaderHeight, &Button, &BottomArea);
-	BottomArea.HSplitTop(SpacingH, 0, &BottomArea);
-	Button.VSplitLeft(50.0f, &Label, &Button);
-	UI()->DoLabel(&Label, Localize("Clan"), FontSize, CUI::ALIGN_LEFT);
-	static char s_aClan[MAX_CLAN_LENGTH] = { 0 };
-	static float s_OffsetClan = 0.0f;
-	DoEditBox(&s_aClan, &Button, s_aClan, sizeof(s_aClan), Button.h*ms_FontmodHeight*0.8f, &s_OffsetClan);
-
-	BottomArea.HSplitTop(HeaderHeight, &Button, &BottomArea);
-	RenderTools()->DrawUIRect(&Button, vec4(1.0f, 1.0f, 1.0f, 0.25f), CUI::CORNER_ALL, 5.0f);
-	if(s_aName[0] || s_aClan[0])
-		Button.VSplitLeft(Button.h, &Icon, &Label);
-	else
-		Label = Button;
-	Label.HMargin(2.0f, &Label);
-	const char *pButtonText = (!s_aName[0] && !s_aClan[0]) ? Localize("Add friend/clan") : s_aName[0] ? Localize("Add friend") : Localize("Add clan");
-	UI()->DoLabel(&Label, pButtonText, FontSize, CUI::ALIGN_CENTER);
-	if(s_aName[0] || s_aClan[0])
-		DoIcon(IMAGE_FRIENDICONS, UI()->MouseHovered(&Button) ? SPRITE_FRIEND_PLUS_A : SPRITE_FRIEND_PLUS_B, &Icon);
-	static CButtonContainer s_AddFriend;
-	if((s_aName[0] || s_aClan[0]) && UI()->DoButtonLogic(&s_AddFriend, &Button))
-	{
-		m_pClient->Friends()->AddFriend(s_aName, s_aClan);
-		FriendlistOnUpdate();
-		Client()->ServerBrowserUpdate();
-		s_aName[0] = 0;
-		s_aClan[0] = 0;
-	}
-
-	// delete friend
-	if(m_pDeleteFriend)
-	{
-		const bool IsPlayer = m_pDeleteFriend->m_FriendState == CContactInfo::CONTACT_PLAYER;
-		char aBuf[128];
-		str_format(aBuf, sizeof(aBuf),
-			IsPlayer ? Localize("Are you sure that you want to remove the player '%s' from your friends list?") : Localize("Are you sure that you want to remove the clan '%s' from your friends list?"),
-			IsPlayer ? m_pDeleteFriend->m_aName : m_pDeleteFriend->m_aClan);
-		PopupConfirm(Localize("Remove friend"), aBuf, Localize("Yes"), Localize("No"), &CMenus::PopupConfirmRemoveFriend);
-	}
-}
-
-void CMenus::PopupConfirmRemoveFriend()
-{
-	m_pClient->Friends()->RemoveFriend(m_pDeleteFriend->m_FriendState == CContactInfo::CONTACT_PLAYER ? m_pDeleteFriend->m_aName : "", m_pDeleteFriend->m_aClan);
-	FriendlistOnUpdate();
-	Client()->ServerBrowserUpdate();
-	m_pDeleteFriend = 0;
-}
-
-void CMenus::RenderServerbrowserFilterTab(CUIRect View)
-{
-	CUIRect ServerFilter = View, FilterHeader, Button, Icon, Label;
-	const float FontSize = 10.0f;
-	const float LineSize = 16.0f;
-
-	// new filter
-	ServerFilter.HSplitBottom(LineSize, &ServerFilter, &Button);
-	Button.VSplitLeft(60.0f, &Icon, &Button);
-	static char s_aFilterName[32] = { 0 };
-	static float s_FilterOffset = 0.0f;
-	DoEditBox(&s_FilterOffset, &Icon, s_aFilterName, sizeof(s_aFilterName), FontSize, &s_FilterOffset, false, CUI::CORNER_L);
-	RenderTools()->DrawUIRect(&Button, vec4(1.0f, 1.0f, 1.0f, 0.25f), CUI::CORNER_R, 5.0f);
-	Button.VSplitLeft(Button.h, &Icon, &Label);
-	Label.HMargin(2.0f, &Label);
-	UI()->DoLabel(&Label, Localize("New filter"), FontSize, CUI::ALIGN_LEFT);
-	if(s_aFilterName[0])
-	{
-		DoIcon(IMAGE_FRIENDICONS, UI()->MouseHovered(&Button) ? SPRITE_FRIEND_PLUS_A : SPRITE_FRIEND_PLUS_B, &Icon);
-		static CButtonContainer s_AddFilter;
-		if(UI()->DoButtonLogic(&s_AddFilter, &Button))
-		{
-			m_lFilters.add(CBrowserFilter(CBrowserFilter::FILTER_CUSTOM, s_aFilterName, ServerBrowser()));
-			m_lFilters[m_lFilters.size()-1].Switch();
-			s_aFilterName[0] = 0;
-			Client()->ServerBrowserUpdate();
-		}
-	}
-
-	CBrowserFilter *pFilter = GetSelectedBrowserFilter();
-	if(!pFilter)
-		return;
-
-	CServerFilterInfo FilterInfo;
-	pFilter->GetFilter(&FilterInfo);
+	CUIRect ServerFilter = View, FilterHeader;
+	const float FontSize = 12.0f;
+	ServerFilter.HSplitBottom(42.5f, &ServerFilter, 0);
 
 	// server filter
-	ServerFilter.HSplitTop(GetListHeaderHeight(), &FilterHeader, &ServerFilter);
-	RenderTools()->DrawUIRect(&FilterHeader, vec4(1, 1, 1, 0.25f), CUI::CORNER_T, 4.0f);
-	RenderTools()->DrawUIRect(&ServerFilter, vec4(0, 0, 0, 0.15f), CUI::CORNER_B, 4.0f);
-	FilterHeader.HMargin(2.0f, &FilterHeader);
-	UI()->DoLabel(&FilterHeader, Localize("Server filter"), FontSize + 2.0f, CUI::ALIGN_CENTER);
+	ServerFilter.HSplitTop(ms_ListheaderHeight, &FilterHeader, &ServerFilter);
+	RenderTools()->DrawUIRect(&FilterHeader, vec4(1,1,1,0.25f), CUI::CORNER_T, 4.0f);
+	RenderTools()->DrawUIRect(&ServerFilter, vec4(0,0,0,0.15f), CUI::CORNER_B, 4.0f);
+	UI()->DoLabelScaled(&FilterHeader, Localize("Server filter"), FontSize+2.0f, 0);
+	CUIRect Button;
 
-	int NewSortHash = FilterInfo.m_SortHash;
-	ServerFilter.HSplitTop(LineSize, &Button, &ServerFilter);
-	static int s_BrFilterEmpty = 0;
-	if(DoButton_CheckBox(&s_BrFilterEmpty, Localize("Has people playing"), FilterInfo.m_SortHash&IServerBrowser::FILTER_EMPTY, &Button))
-		NewSortHash ^= IServerBrowser::FILTER_EMPTY;
+	ServerFilter.VSplitLeft(5.0f, 0, &ServerFilter);
+	ServerFilter.Margin(3.0f, &ServerFilter);
+	ServerFilter.VMargin(5.0f, &ServerFilter);
 
-	ServerFilter.HSplitTop(LineSize, &Button, &ServerFilter);
-	static int s_BrFilterSpectators = 0;
-	if(DoButton_CheckBox(&s_BrFilterSpectators, Localize("Count players only"), FilterInfo.m_SortHash&IServerBrowser::FILTER_SPECTATORS, &Button))
-		NewSortHash ^= IServerBrowser::FILTER_SPECTATORS;
+	ServerFilter.HSplitTop(20.0f, &Button, &ServerFilter);
+	if (DoButton_CheckBox(&g_Config.m_BrFilterEmpty, Localize("Has people playing"), g_Config.m_BrFilterEmpty, &Button))
+		g_Config.m_BrFilterEmpty ^= 1;
 
-	ServerFilter.HSplitTop(LineSize, &Button, &ServerFilter);
-	static int s_BrFilterFull = 0;
-	if(DoButton_CheckBox(&s_BrFilterFull, Localize("Server not full"), FilterInfo.m_SortHash&IServerBrowser::FILTER_FULL, &Button))
-		NewSortHash ^= IServerBrowser::FILTER_FULL;
+	ServerFilter.HSplitTop(20.0f, &Button, &ServerFilter);
+	if(DoButton_CheckBox(&g_Config.m_BrFilterSpectators, Localize("Count players only"), g_Config.m_BrFilterSpectators, &Button))
+		g_Config.m_BrFilterSpectators ^= 1;
 
-	ServerFilter.HSplitTop(LineSize, &Button, &ServerFilter);
-	static int s_BrFilterFriends = 0;
-	if(DoButton_CheckBox(&s_BrFilterFriends, Localize("Show friends only"), FilterInfo.m_SortHash&IServerBrowser::FILTER_FRIENDS, &Button))
-		NewSortHash ^= IServerBrowser::FILTER_FRIENDS;
+	ServerFilter.HSplitTop(20.0f, &Button, &ServerFilter);
+	if (DoButton_CheckBox(&g_Config.m_BrFilterFull, Localize("Server not full"), g_Config.m_BrFilterFull, &Button))
+		g_Config.m_BrFilterFull ^= 1;
 
-	ServerFilter.HSplitTop(LineSize, &Button, &ServerFilter);
-	static int s_BrFilterBots = 0;
-	if(DoButton_CheckBox(&s_BrFilterBots, Localize("Hide bots"), FilterInfo.m_SortHash&IServerBrowser::FILTER_BOTS, &Button))
-		NewSortHash ^= IServerBrowser::FILTER_BOTS;
+	ServerFilter.HSplitTop(20.0f, &Button, &ServerFilter);
+	if (DoButton_CheckBox(&g_Config.m_BrFilterFriends, Localize("Show friends only"), g_Config.m_BrFilterFriends, &Button))
+		g_Config.m_BrFilterFriends ^= 1;
 
-	ServerFilter.HSplitTop(LineSize, &Button, &ServerFilter);
-	static int s_BrFilterPw = 0;
-	if(DoButton_CheckBox(&s_BrFilterPw, Localize("No password"), FilterInfo.m_SortHash&IServerBrowser::FILTER_PW, &Button))
-		NewSortHash ^= IServerBrowser::FILTER_PW;
+	ServerFilter.HSplitTop(20.0f, &Button, &ServerFilter);
+	if (DoButton_CheckBox(&g_Config.m_BrFilterPw, Localize("No password"), g_Config.m_BrFilterPw, &Button))
+		g_Config.m_BrFilterPw ^= 1;
 
-	ServerFilter.HSplitTop(LineSize, &Button, &ServerFilter);
-	static int s_BrFilterCompatversion = 0;
-	if(DoButton_CheckBox(&s_BrFilterCompatversion, Localize("Compatible version"), FilterInfo.m_SortHash&IServerBrowser::FILTER_COMPAT_VERSION, &Button))
-		NewSortHash ^= IServerBrowser::FILTER_COMPAT_VERSION;
+	ServerFilter.HSplitTop(20.0f, &Button, &ServerFilter);
+	if (DoButton_CheckBox((char *)&g_Config.m_BrFilterCompatversion, Localize("Compatible version"), g_Config.m_BrFilterCompatversion, &Button))
+		g_Config.m_BrFilterCompatversion ^= 1;
 
-	ServerFilter.HSplitTop(LineSize, &Button, &ServerFilter);
-	const bool Locked = pFilter->Custom() == CBrowserFilter::FILTER_STANDARD;
-	static int s_BrFilterPure = 0;
-	if(DoButton_CheckBox(&s_BrFilterPure, Localize("Standard gametype"), FilterInfo.m_SortHash&IServerBrowser::FILTER_PURE, &Button, Locked))
-		NewSortHash ^= IServerBrowser::FILTER_PURE;
+	ServerFilter.HSplitTop(20.0f, &Button, &ServerFilter);
+	if (DoButton_CheckBox((char *)&g_Config.m_BrFilterUptodate, Localize("Up-to-date only"), g_Config.m_BrFilterUptodate, &Button))
+		g_Config.m_BrFilterUptodate ^= 1;
 
-	ServerFilter.HSplitTop(LineSize, &Button, &ServerFilter);
-	static int s_BrFilterPureMap = 0;
-	if(DoButton_CheckBox(&s_BrFilterPureMap, Localize("Standard map"), FilterInfo.m_SortHash&IServerBrowser::FILTER_PURE_MAP, &Button))
-		NewSortHash ^= IServerBrowser::FILTER_PURE_MAP;
+	ServerFilter.HSplitTop(20.0f, &Button, &ServerFilter);
+	if (DoButton_CheckBox((char *)&g_Config.m_BrFilterPure, Localize("Standard gametype"), g_Config.m_BrFilterPure, &Button))
+		g_Config.m_BrFilterPure ^= 1;
 
-	bool UpdateFilter = false;
-	if(FilterInfo.m_SortHash != NewSortHash)
+	ServerFilter.HSplitTop(20.0f, &Button, &ServerFilter);
+	if (DoButton_CheckBox((char *)&g_Config.m_BrFilterPureMap, Localize("Standard map"), g_Config.m_BrFilterPureMap, &Button))
+		g_Config.m_BrFilterPureMap ^= 1;
+
+	ServerFilter.HSplitTop(20.0f, &Button, &ServerFilter);
+	if (DoButton_CheckBox((char *)&g_Config.m_BrFilterGametypeStrict, Localize("Strict gametype filter"), g_Config.m_BrFilterGametypeStrict, &Button))
+		g_Config.m_BrFilterGametypeStrict ^= 1;
+
+	ServerFilter.HSplitTop(20.0f, &Button, &ServerFilter);
+	if (DoButton_CheckBox((char *)&g_Config.m_BrFilterTeerace, Localize("Teerace servers only"), g_Config.m_BrFilterTeerace, &Button))
+		g_Config.m_BrFilterTeerace ^= 1;
+
+	ServerFilter.HSplitTop(5.0f, 0, &ServerFilter);
+
+	ServerFilter.HSplitTop(19.0f, &Button, &ServerFilter);
+	UI()->DoLabelScaled(&Button, Localize("Game types:"), FontSize, -1);
+	Button.VSplitRight(60.0f, 0, &Button);
+	ServerFilter.HSplitTop(3.0f, 0, &ServerFilter);
+	static float Offset = 0.0f;
+	if(DoEditBox(&g_Config.m_BrFilterGametype, &Button, g_Config.m_BrFilterGametype, sizeof(g_Config.m_BrFilterGametype), FontSize, &Offset))
+		Client()->ServerBrowserUpdate();
+
 	{
-		FilterInfo.m_SortHash = NewSortHash;
-		UpdateFilter = true;
-	}
+		ServerFilter.HSplitTop(19.0f, &Button, &ServerFilter);
+		CUIRect EditBox;
+		Button.VSplitRight(60.0f, &Button, &EditBox);
 
-	// game types filter
-	{
-		ServerFilter.HSplitTop(5.0f, 0, &ServerFilter);
-		ServerFilter.HSplitTop(LineSize, &Button, &ServerFilter);
-		UI()->DoLabel(&Button, Localize("Game types:"), FontSize, CUI::ALIGN_LEFT);
-		ServerFilter.HSplitTop(LineSize, &Button, &ServerFilter);
-		RenderTools()->DrawUIRect(&Button, vec4(0.0, 0.0, 0.0, 0.25f), CUI::CORNER_ALL, 2.0f);
+		UI()->DoLabelScaled(&Button, Localize("Maximum ping:"), FontSize, -1);
 
-		Button.HMargin(2.0f, &Button);
-		UI()->ClipEnable(&Button);
-
-		const float Spacing = 2.0f;
-		const float IconWidth = 10.0f;
-
-		float Length = 0.0f;
-		for(int i = 0; i < CServerFilterInfo::MAX_GAMETYPES; ++i)
-		{
-			if(!FilterInfo.m_aGametype[i][0])
-				break;
-			Length += TextRender()->TextWidth(0, FontSize, FilterInfo.m_aGametype[i], -1, -1.0f) + IconWidth + 2*Spacing;
-		}
-		static float s_ScrollValue = 0.0f;
-		const bool NeedScrollbar = (Button.w - Length) < 0.0f;
-		Button.x += min(0.0f, Button.w - Length) * s_ScrollValue;
-		for(int i = 0; i < CServerFilterInfo::MAX_GAMETYPES; ++i)
-		{
-			if(!FilterInfo.m_aGametype[i][0])
-				break;
-			const float ItemLength = TextRender()->TextWidth(0, FontSize, FilterInfo.m_aGametype[i], -1, -1.0f) + IconWidth + Spacing;
-			CUIRect FilterItem;
-			Button.VSplitLeft(ItemLength, &FilterItem, &Button);
-			RenderTools()->DrawUIRect(&FilterItem, FilterInfo.m_aGametypeExclusive[i] ? vec4(0.75f, 0.25f, 0.25f, 0.25f) : vec4(0.25f, 0.75f, 0.25f, 0.25f), CUI::CORNER_ALL, 3.0f);
-			FilterItem.VSplitLeft(Spacing, 0, &FilterItem);
-			UI()->DoLabel(&FilterItem, FilterInfo.m_aGametype[i], FontSize, CUI::ALIGN_LEFT);
-			FilterItem.VSplitRight(IconWidth, 0, &FilterItem);
-			DoIcon(IMAGE_TOOLICONS, UI()->MouseHovered(&FilterItem) ? SPRITE_TOOL_X_A : SPRITE_TOOL_X_B, &FilterItem);
-			if(UI()->DoButtonLogic(&FilterInfo.m_aGametype[i], &FilterItem))
-			{
-				// remove gametype entry
-				if((i == CServerFilterInfo::MAX_GAMETYPES - 1) || !FilterInfo.m_aGametype[i + 1][0])
-				{
-					FilterInfo.m_aGametype[i][0] = 0;
-					FilterInfo.m_aGametypeExclusive[i] = false;
-				}
-				else
-				{
-					int j = i;
-					for(; j < CServerFilterInfo::MAX_GAMETYPES - 1 && FilterInfo.m_aGametype[j + 1][0]; ++j)
-					{
-						str_copy(FilterInfo.m_aGametype[j], FilterInfo.m_aGametype[j + 1], sizeof(FilterInfo.m_aGametype[j]));
-						FilterInfo.m_aGametypeExclusive[j] = FilterInfo.m_aGametypeExclusive[j + 1];
-					}
-					FilterInfo.m_aGametype[j][0] = 0;
-					FilterInfo.m_aGametypeExclusive[j] = false;
-				}
-				UpdateFilter = true;
-			}
-			Button.VSplitLeft(Spacing, 0, &Button);
-		}
-
-		UI()->ClipDisable();
-
-		if(NeedScrollbar)
-		{
-			ServerFilter.HSplitTop(LineSize, &Button, &ServerFilter);
-			s_ScrollValue = DoScrollbarH(&s_ScrollValue, &Button, s_ScrollValue);
-		}
-		else
-			ServerFilter.HSplitTop(4.f, &Button, &ServerFilter); // Leave some space in between edit boxes
-
-		CUIRect ButtonLine;
-		ServerFilter.HSplitTop(LineSize, &ButtonLine, &ServerFilter);
-
-		CUIRect EditBox, AddIncButton, AddExlButton, ClearButton;
-		ButtonLine.VSplitRight(40.0f, &ButtonLine, &ClearButton);
-		ButtonLine.VSplitRight(10.0f, &ButtonLine, 0);
-		ButtonLine.VSplitRight(ButtonLine.h, &ButtonLine, &AddExlButton);
-		ButtonLine.VSplitRight(ButtonLine.h, &EditBox, &AddIncButton);
-
-		static char s_aGametype[16] = { 0 };
-		static float s_OffsetGametype = 0.0f;
-		DoEditBox(&s_OffsetGametype, &EditBox, s_aGametype, sizeof(s_aGametype), FontSize, &s_OffsetGametype, false, CUI::CORNER_L);
-
-		static CButtonContainer s_AddInclusiveGametype;
-		if(DoButton_Menu(&s_AddInclusiveGametype, "+", 0, &AddIncButton, 0, 0) && s_aGametype[0])
-		{
-			for(int i = 0; i < CServerFilterInfo::MAX_GAMETYPES; ++i)
-			{
-				if(!FilterInfo.m_aGametype[i][0])
-				{
-					str_copy(FilterInfo.m_aGametype[i], s_aGametype, sizeof(FilterInfo.m_aGametype[i]));
-					FilterInfo.m_aGametypeExclusive[i] = false;
-					UpdateFilter = true;
-					s_aGametype[0] = 0;
-					break;
-				}
-			}
-		}
-
-		static CButtonContainer s_AddExclusiveGametype;
-		if(DoButton_Menu(&s_AddExclusiveGametype, "-", 0, &AddExlButton, 0, CUI::CORNER_R) && s_aGametype[0])
-		{
-			for(int i = 0; i < CServerFilterInfo::MAX_GAMETYPES; ++i)
-			{
-				if(!FilterInfo.m_aGametype[i][0])
-				{
-					str_copy(FilterInfo.m_aGametype[i], s_aGametype, sizeof(FilterInfo.m_aGametype[i]));
-					FilterInfo.m_aGametypeExclusive[i] = true;
-					UpdateFilter = true;
-					s_aGametype[0] = 0;
-					break;
-				}
-			}
-		}
-
-		static CButtonContainer s_ClearGametypes;
-		if(DoButton_MenuTabTop(&s_ClearGametypes, Localize("Clear", "clear gametype filters"), false, &ClearButton))
-		{
-			for(int i = 0; i < CServerFilterInfo::MAX_GAMETYPES; ++i)
-			{
-				FilterInfo.m_aGametype[i][0] = 0;
-				FilterInfo.m_aGametypeExclusive[i] = false;
-			}
-			UpdateFilter = true;
-		}
-
-		ServerFilter.HSplitTop(3.0f, 0, &ServerFilter);
-	}
-
-	// ping
-	ServerFilter.HSplitTop(LineSize - 4.f, &Button, &ServerFilter);
-	{
-		int Value = FilterInfo.m_Ping, Min = 20, Max = 999;
-
-		char aBuf[64];
-		str_format(aBuf, sizeof(aBuf), "%s %d", Localize("Maximum ping:"), Value);
-		UI()->DoLabel(&Button, aBuf, FontSize, CUI::ALIGN_LEFT);
-
-		ServerFilter.HSplitTop(LineSize, &Button, &ServerFilter);
-
-		RenderTools()->DrawUIRect(&Button, vec4(0.0f, 0.0f, 0.0f, 0.25f), CUI::CORNER_ALL, 5.0f);
-		Button.VMargin(4.0f, &Button);
-		static int s_BrFilterPing = 0;
-		Value = LogarithmicScrollbarScale.ToAbsolute(DoScrollbarH(&s_BrFilterPing, &Button, LogarithmicScrollbarScale.ToRelative(Value, Min, Max)), Min, Max);
-		if(Value != FilterInfo.m_Ping) {
-			FilterInfo.m_Ping = Value;
-			UpdateFilter = true;
-		}
+		char aBuf[5];
+		str_format(aBuf, sizeof(aBuf), "%d", g_Config.m_BrFilterPing);
+		static float Offset = 0.0f;
+		DoEditBox(&g_Config.m_BrFilterPing, &EditBox, aBuf, sizeof(aBuf), FontSize, &Offset);
+		g_Config.m_BrFilterPing = clamp(str_toint(aBuf), 0, 999);
 	}
 
 	// server address
 	ServerFilter.HSplitTop(3.0f, 0, &ServerFilter);
-	ServerFilter.HSplitTop(LineSize, &Button, &ServerFilter);
-	UI()->DoLabel(&Button, Localize("Server address:"), FontSize, CUI::ALIGN_LEFT);
+	ServerFilter.HSplitTop(19.0f, &Button, &ServerFilter);
+	UI()->DoLabelScaled(&Button, Localize("Server address:"), FontSize, -1);
 	Button.VSplitRight(60.0f, 0, &Button);
-	static float s_OffsetAddr = 0.0f;
-	if(DoEditBox(&s_OffsetAddr, &Button, FilterInfo.m_aAddress, sizeof(FilterInfo.m_aAddress), FontSize, &s_OffsetAddr))
-		UpdateFilter = true;
+	static float OffsetAddr = 0.0f;
+	if(DoEditBox(&g_Config.m_BrFilterServerAddress, &Button, g_Config.m_BrFilterServerAddress, sizeof(g_Config.m_BrFilterServerAddress), FontSize, &OffsetAddr))
+		Client()->ServerBrowserUpdate();
 
 	// player country
 	{
 		CUIRect Rect;
 		ServerFilter.HSplitTop(3.0f, 0, &ServerFilter);
-		ServerFilter.HSplitTop(LineSize, &Button, &ServerFilter);
-		UI()->DoLabel(&Button, Localize("Country:"), FontSize, CUI::ALIGN_LEFT);
-		Button.VSplitRight(60.0f, 0, &Rect);
-		Rect.VSplitLeft(16.0f, &Button, &Rect);
-		static int s_BrFilterCountry = 0;
-		if(DoButton_CheckBox(&s_BrFilterCountry, "", FilterInfo.m_SortHash&IServerBrowser::FILTER_COUNTRY, &Button))
-		{
-			FilterInfo.m_SortHash ^= IServerBrowser::FILTER_COUNTRY;
-			UpdateFilter = true;
-		}
-		Rect.w = Rect.h * 2;
-		vec4 Color(1.0f, 1.0f, 1.0f, FilterInfo.m_SortHash&IServerBrowser::FILTER_COUNTRY ? 1.0f : 0.5f);
-		m_pClient->m_pCountryFlags->Render(FilterInfo.m_Country, &Color, Rect.x, Rect.y, Rect.w, Rect.h);
+		ServerFilter.HSplitTop(26.0f, &Button, &ServerFilter);
+		Button.VSplitRight(60.0f, &Button, &Rect);
+		Button.HMargin(3.0f, &Button);
+		if(DoButton_CheckBox(&g_Config.m_BrFilterCountry, Localize("Player country:"), g_Config.m_BrFilterCountry, &Button))
+			g_Config.m_BrFilterCountry ^= 1;
 
-		static int s_BrFilterCountryIndex = 0;
-		if((FilterInfo.m_SortHash&IServerBrowser::FILTER_COUNTRY) && UI()->DoButtonLogic(&s_BrFilterCountryIndex, &Rect))
+		float OldWidth = Rect.w;
+		Rect.w = Rect.h*2;
+		Rect.x += (OldWidth-Rect.w)/2.0f;
+		vec4 Color(1.0f, 1.0f, 1.0f, g_Config.m_BrFilterCountry?1.0f: 0.5f);
+		m_pClient->m_pCountryFlags->Render(g_Config.m_BrFilterCountryIndex, &Color, Rect.x, Rect.y, Rect.w, Rect.h);
+
+		if(g_Config.m_BrFilterCountry && UI()->DoButtonLogic(&g_Config.m_BrFilterCountryIndex, "", 0, &Rect))
 			m_Popup = POPUP_COUNTRY;
 	}
 
-	// level
-	ServerFilter.HSplitTop(5.0f, 0, &ServerFilter);
-	ServerFilter.HSplitTop(LineSize + 2, &Button, &ServerFilter);
-	UI()->DoLabel(&Button, Localize("Difficulty:"), FontSize, CUI::ALIGN_LEFT);
-	Button.VSplitRight(60.0f, 0, &Button);
-	Button.y -= 2.0f;
-	Button.VSplitLeft(Button.h, &Icon, &Button);
-	static CButtonContainer s_LevelButton1;
-	if(DoButton_SpriteID(&s_LevelButton1, IMAGE_LEVELICONS, FilterInfo.IsLevelFiltered(CServerInfo::LEVEL_CASUAL) ? SPRITE_LEVEL_A_B : SPRITE_LEVEL_A_ON, false, &Icon, CUI::CORNER_L, 5.0f, true))
+	ServerFilter.HSplitBottom(5.0f, &ServerFilter, 0);
+	ServerFilter.HSplitBottom(ms_ButtonHeight-2.0f, &ServerFilter, &Button);
+	static int s_ClearButton = 0;
+	if(DoButton_Menu(&s_ClearButton, Localize("Reset filter"), 0, &Button))
 	{
-		FilterInfo.ToggleLevel(CServerInfo::LEVEL_CASUAL);
-		UpdateFilter = true;
-	}
-	Button.VSplitLeft(Button.h, &Icon, &Button);
-	static CButtonContainer s_LevelButton2;
-	if(DoButton_SpriteID(&s_LevelButton2, IMAGE_LEVELICONS, FilterInfo.IsLevelFiltered(CServerInfo::LEVEL_NORMAL) ? SPRITE_LEVEL_B_B : SPRITE_LEVEL_B_ON, false, &Icon, 0, 5.0f, true))
-	{
-		FilterInfo.ToggleLevel(CServerInfo::LEVEL_NORMAL);
-		UpdateFilter = true;
-	}
-	Button.VSplitLeft(Button.h, &Icon, &Button);
-	static CButtonContainer s_LevelButton3;
-	if(DoButton_SpriteID(&s_LevelButton3, IMAGE_LEVELICONS, FilterInfo.IsLevelFiltered(CServerInfo::LEVEL_COMPETITIVE) ? SPRITE_LEVEL_C_B : SPRITE_LEVEL_C_ON, false, &Icon, CUI::CORNER_R, 5.0f, true))
-	{
-		FilterInfo.ToggleLevel(CServerInfo::LEVEL_COMPETITIVE);
-		UpdateFilter = true;
-	}
-
-	if(UpdateFilter)
-	{
-		pFilter->SetFilter(&FilterInfo);
-	}
-
-	// reset filter
-	ServerFilter.HSplitBottom(LineSize, &ServerFilter, 0);
-	ServerFilter.HSplitBottom(LineSize, &ServerFilter, &Button);
-	Button.VMargin((Button.w - 80.0f) / 2, &Button);
-	static CButtonContainer s_ResetButton;
-	if(DoButton_Menu(&s_ResetButton, Localize("Reset filter"), 0, &Button))
-	{
-		pFilter->Reset();
-		UpdateFilter = true;
-	}
-
-	if(UpdateFilter)
-	{
-		ServerBrowserFilterOnUpdate();
+		g_Config.m_BrFilterString[0] = 0;
+		g_Config.m_BrFilterFull = 0;
+		g_Config.m_BrFilterEmpty = 0;
+		g_Config.m_BrFilterSpectators = 0;
+		g_Config.m_BrFilterFriends = 0;
+		g_Config.m_BrFilterCountry = 0;
+		g_Config.m_BrFilterCountryIndex = -1;
+		g_Config.m_BrFilterPw = 0;
+		g_Config.m_BrFilterPing = 999;
+		g_Config.m_BrFilterGametype[0] = 0;
+		g_Config.m_BrFilterGametypeStrict = 0;
+		g_Config.m_BrFilterServerAddress[0] = 0;
+		g_Config.m_BrFilterPure = 1;
+		g_Config.m_BrFilterPureMap = 1;
+		g_Config.m_BrFilterCompatversion = 1;
+		g_Config.m_BrFilterUptodate = 1;
+		Client()->ServerBrowserUpdate();
 	}
 }
 
-void CMenus::RenderServerbrowserInfoTab(CUIRect View)
+void CMenus::RenderServerbrowserServerDetail(CUIRect View)
 {
-	const CServerInfo *pInfo = GetSelectedServerInfo();
-	if(pInfo)
-	{
-		RenderServerbrowserServerDetail(View, pInfo);
-	}
-}
+	CUIRect ServerDetails = View;
+	CUIRect ServerScoreBoard, ServerHeader;
 
-void CMenus::RenderDetailInfo(CUIRect View, const CServerInfo *pInfo, const vec4 &TextColor, const vec4 &TextOutlineColor)
-{
-	const float FontSize = 10.0f;
-	const float RowHeight = 15.0f;
-
-	TextRender()->TextColor(TextColor);
-	TextRender()->TextOutlineColor(TextOutlineColor);
-
-	CUIRect ServerHeader;
-	View.HSplitTop(GetListHeaderHeight(), &ServerHeader, &View);
-	RenderTools()->DrawUIRect(&ServerHeader, vec4(1, 1, 1, 0.25f), CUI::CORNER_T, 5.0f);
-	RenderTools()->DrawUIRect(&View, vec4(0, 0, 0, 0.15f), CUI::CORNER_B, 5.0f);
-	ServerHeader.HMargin(2.0f, &ServerHeader);
-	UI()->DoLabel(&ServerHeader, Localize("Server details"), FontSize + 2.0f, CUI::ALIGN_CENTER);
-
-	if(!pInfo)
-		return;
-
-	CUIRect Row;
-	// Localize("Map:"); Localize("Game type:"); Localize("Version:"); Localize("Difficulty:"); Localize("Casual", "Server difficulty"); Localize("Normal", "Server difficulty"); Localize("Competitive", "Server difficulty");
-	static CLocConstString s_aLabels[] = {
-		"Map:",
-		"Game type:",
-		"Version:",
-		"Difficulty:" };
-	static CLocConstString s_aDifficultyLabels[] = {
-		"Casual",
-		"Normal",
-		"Competitive" };
-	static int s_aDifficultySpriteIds[] = {
-		SPRITE_LEVEL_A_ON,
-		SPRITE_LEVEL_B_ON,
-		SPRITE_LEVEL_C_ON };
-
-	CUIRect LeftColumn, RightColumn;
-	View.VMargin(2.0f, &View);
-	View.VSplitLeft(70.0f, &LeftColumn, &RightColumn);
-
-	for(unsigned int i = 0; i < sizeof(s_aLabels) / sizeof(s_aLabels[0]); i++)
-	{
-		LeftColumn.HSplitTop(RowHeight, &Row, &LeftColumn);
-		UI()->DoLabel(&Row, s_aLabels[i], FontSize, CUI::ALIGN_LEFT, Row.w, false);
-	}
-
-	// map
-	RightColumn.HSplitTop(RowHeight, &Row, &RightColumn);
-	UI()->DoLabel(&Row, pInfo->m_aMap, FontSize, CUI::ALIGN_LEFT, Row.w, false);
-
-	// game type
-	RightColumn.HSplitTop(RowHeight, &Row, &RightColumn);
-	CUIRect Icon;
-	Row.VSplitLeft(Row.h, &Icon, &Row);
-	Icon.y -= 2.0f;
-	DoGameIcon(pInfo->m_aGameType, &Icon);
-	UI()->DoLabel(&Row, pInfo->m_aGameType, FontSize, CUI::ALIGN_LEFT, Row.w, false);
-
-	// version
-	RightColumn.HSplitTop(RowHeight, &Row, &RightColumn);
-	UI()->DoLabel(&Row, pInfo->m_aVersion, FontSize, CUI::ALIGN_LEFT, Row.w, false);
-
-	// difficulty
-	RightColumn.HSplitTop(RowHeight, &Row, &RightColumn);
-	Row.VSplitLeft(Row.h, &Icon, &Row);
-	Icon.y -= 2.0f;
-	DoIcon(IMAGE_LEVELICONS, s_aDifficultySpriteIds[pInfo->m_ServerLevel], &Icon);
-	UI()->DoLabel(&Row, s_aDifficultyLabels[pInfo->m_ServerLevel], FontSize, CUI::ALIGN_LEFT, Row.w, false);
-}
-
-void CMenus::RenderDetailScoreboard(CUIRect View, const CServerInfo *pInfo, int RowCount, const vec4 &TextColor, const vec4 &TextOutlineColor)
-{
-	RenderTools()->DrawUIRect(&View, vec4(0, 0, 0, 0.15f), RowCount > 0 ? CUI::CORNER_B|CUI::CORNER_TL : CUI::CORNER_B, 5.0f);
-	View.Margin(2.0f, &View);
-
-	if(!pInfo)
-		return;
-
-	CBrowserFilter *pFilter = GetSelectedBrowserFilter();
-	CServerFilterInfo FilterInfo;
-	if(pFilter)
-		pFilter->GetFilter(&FilterInfo);
-
-	TextRender()->TextColor(TextColor);
-	TextRender()->TextOutlineColor(TextOutlineColor);
-
-	static const CServerInfo *s_pLastInfo = pInfo;
-	const bool ResetScroll = s_pLastInfo != pInfo;
-	s_pLastInfo = pInfo;
-
-	const float RowWidth = (RowCount == 0) ? View.w : (View.w * 0.25f);
-	const float FontSize = 8.0f;
-	const vec4 HighlightColor = vec4(TextHighlightColor.r, TextHighlightColor.g, TextHighlightColor.b, TextColor.a);
-	float LineHeight = 20.0f;
-
-	static CScrollRegion s_ScrollRegion;
-	vec2 ScrollOffset(0, 0);
-	CScrollRegionParams ScrollParams;
-	ScrollParams.m_ClipBgColor = vec4(0,0,0,0);
-	ScrollParams.m_ScrollbarBgColor = vec4(0,0,0,0);
-	ScrollParams.m_ScrollbarWidth = 5;
-	ScrollParams.m_ScrollbarMargin = 1;
-	ScrollParams.m_ScrollUnit = 60.0f; // 3 players per scroll
-	s_ScrollRegion.Begin(&View, &ScrollOffset, &ScrollParams);
-	View.y += ScrollOffset.y;
-	if(RowCount > 0)
-	{
-		const float Width = RowWidth * ((pInfo->m_NumClients+RowCount-1) / RowCount);
-		static float s_ScrollValue = 0.0f;
-		if(ResetScroll)
-		{
-			s_ScrollValue = 0.0f;
-		}
-		if(Width > View.w)
-		{
-			CUIRect Scroll;
-			View.HSplitBottom(14.0f, &View, &Scroll);
-			Scroll.VMargin(5.0f, &Scroll);
-			s_ScrollValue = DoScrollbarH(&s_ScrollValue, &Scroll, s_ScrollValue);
-			View.x += (View.w - Width) * s_ScrollValue;
-			LineHeight = 0.25f*View.h;
-		}
-	}
-
-	CUIRect Row = View;
-
-	int Count = 0;
-	for(int i = 0; i < pInfo->m_NumClients; i++)
-	{
-		if(pFilter && (FilterInfo.m_SortHash&IServerBrowser::FILTER_BOTS) && (pInfo->m_aClients[i].m_PlayerType&CServerInfo::CClient::PLAYERFLAG_BOT))
-			continue;
-
-		CUIRect Name, Clan, Score, Flag, Icon;
-
-		if(RowCount > 0 && Count % RowCount == 0)
-			View.VSplitLeft(RowWidth, &Row, &View);
-
-		Row.HSplitTop(LineHeight, &Name, &Row);
-		s_ScrollRegion.AddRect(Name);
-		if(Count == 0 && ResetScroll)
-			s_ScrollRegion.ScrollHere(CScrollRegion::SCROLLHERE_KEEP_IN_VIEW);
-
-		Count++;
-		if(s_ScrollRegion.IsRectClipped(Name))
-			continue;
-
-		RenderTools()->DrawRoundRect(&Name, vec4(1.0f, 1.0f, 1.0f, (Count % 2 ? 1 : 2)*0.05f), 5.0f);
-
-		// friend
-		if(UI()->DoButtonLogic(&pInfo->m_aClients[i], &Name))
-		{
-			if(pInfo->m_aClients[i].m_FriendState == CContactInfo::CONTACT_PLAYER)
-				m_pClient->Friends()->RemoveFriend(pInfo->m_aClients[i].m_aName, pInfo->m_aClients[i].m_aClan);
-			else
-				m_pClient->Friends()->AddFriend(pInfo->m_aClients[i].m_aName, pInfo->m_aClients[i].m_aClan);
-			FriendlistOnUpdate();
-			Client()->ServerBrowserUpdate();
-		}
-		Name.VSplitLeft(Name.h-8.0f, &Icon, &Name);
-		Icon.HMargin(4.0f, &Icon);
-		if(pInfo->m_aClients[i].m_FriendState != CContactInfo::CONTACT_NO)
-			DoIcon(IMAGE_BROWSEICONS, SPRITE_BROWSE_HEART_A, &Icon);
-
-		Name.VSplitLeft(2.0f, 0, &Name);
-		Name.VSplitLeft(25.0f, &Score, &Name);
-		Name.VSplitRight(2*(Name.h-8.0f), &Name, &Flag);
-		Name.HSplitTop(LineHeight*0.5f, &Name, &Clan);
-
-		// score
-		if(!(pInfo->m_aClients[i].m_PlayerType&CServerInfo::CClient::PLAYERFLAG_SPEC))
-		{
-			Score.y += 4.0f;
-			char aTemp[16];
-			FormatScore(aTemp, sizeof(aTemp), pInfo->m_Flags&IServerBrowser::FLAG_TIMESCORE, &pInfo->m_aClients[i]);
-			UI()->DoLabel(&Score, aTemp, FontSize, CUI::ALIGN_LEFT);
-		}
-
-		// name
-		UI()->DoLabelHighlighted(&Name, pInfo->m_aClients[i].m_aName, Config()->m_BrFilterString, FontSize, TextColor, HighlightColor);
-
-		// clan
-		UI()->DoLabelHighlighted(&Clan, pInfo->m_aClients[i].m_aClan, Config()->m_BrFilterString, FontSize, TextColor, HighlightColor);
-
-		// flag
-		Flag.HMargin(4.0f, &Flag);
-		Flag.w = Flag.h*2;
-		vec4 FlagColor(1.0f, 1.0f, 1.0f, 0.5f);
-		m_pClient->m_pCountryFlags->Render(pInfo->m_aClients[i].m_Country, &FlagColor, Flag.x, Flag.y, Flag.w, Flag.h);
-	}
-
-	s_ScrollRegion.End();
-}
-
-void CMenus::RenderServerbrowserServerDetail(CUIRect View, const CServerInfo *pInfo)
-{
-	CUIRect ServerHeader, ServerDetails, ServerScoreboard;
+	const CServerInfo *pSelectedServer = ServerBrowser()->SortedGet(m_SelectedIndex);
 
 	// split off a piece to use for scoreboard
-	View.HSplitTop(80.0f, &ServerDetails, &ServerScoreboard);
+	ServerDetails.HSplitTop(90.0f, &ServerDetails, &ServerScoreBoard);
+	ServerDetails.HSplitBottom(2.5f, &ServerDetails, 0x0);
 
 	// server details
-	RenderDetailInfo(ServerDetails, pInfo, CUI::ms_DefaultTextColor, CUI::ms_DefaultTextOutlineColor);
+	CTextCursor Cursor;
+	const float FontSize = 12.0f;
+	ServerDetails.HSplitTop(ms_ListheaderHeight, &ServerHeader, &ServerDetails);
+	RenderTools()->DrawUIRect(&ServerHeader, vec4(1,1,1,0.25f), CUI::CORNER_T, 4.0f);
+	RenderTools()->DrawUIRect(&ServerDetails, vec4(0,0,0,0.15f), CUI::CORNER_B, 4.0f);
+	UI()->DoLabelScaled(&ServerHeader, Localize("Server details"), FontSize+2.0f, 0);
+
+	if (pSelectedServer)
+	{
+		ServerDetails.VSplitLeft(5.0f, 0, &ServerDetails);
+		ServerDetails.Margin(3.0f, &ServerDetails);
+
+		CUIRect Row;
+		static CLocConstString s_aLabels[] = {
+			"Version",	// Localize - these strings are localized within CLocConstString
+			"Game type",
+			"Ping"};
+
+		CUIRect LeftColumn;
+		CUIRect RightColumn;
+
+		//
+		{
+			CUIRect Button;
+			ServerDetails.HSplitBottom(20.0f, &ServerDetails, &Button);
+			Button.VSplitLeft(5.0f, 0, &Button);
+			static int s_AddFavButton = 0;
+			if(DoButton_CheckBox(&s_AddFavButton, Localize("Favorite"), pSelectedServer->m_Favorite, &Button))
+			{
+				if(pSelectedServer->m_Favorite)
+					ServerBrowser()->RemoveFavorite(pSelectedServer->m_NetAddr);
+				else
+					ServerBrowser()->AddFavorite(pSelectedServer->m_NetAddr);
+			}
+		}
+
+		ServerDetails.VSplitLeft(5.0f, 0x0, &ServerDetails);
+		ServerDetails.VSplitLeft(80.0f, &LeftColumn, &RightColumn);
+
+		for (unsigned int i = 0; i < sizeof(s_aLabels) / sizeof(s_aLabels[0]); i++)
+		{
+			LeftColumn.HSplitTop(15.0f, &Row, &LeftColumn);
+			UI()->DoLabelScaled(&Row, s_aLabels[i], FontSize, -1);
+		}
+
+		RightColumn.HSplitTop(15.0f, &Row, &RightColumn);
+		TextRender()->SetCursor(&Cursor, Row.x, Row.y, FontSize, TEXTFLAG_RENDER|TEXTFLAG_STOP_AT_END);
+		Cursor.m_LineWidth = Row.w;
+		TextRender()->TextEx(&Cursor, pSelectedServer->m_aVersion, -1);
+
+		RightColumn.HSplitTop(15.0f, &Row, &RightColumn);
+		TextRender()->SetCursor(&Cursor, Row.x, Row.y, FontSize, TEXTFLAG_RENDER|TEXTFLAG_STOP_AT_END);
+		Cursor.m_LineWidth = Row.w;
+		TextRender()->TextEx(&Cursor, pSelectedServer->m_aGameType, -1);
+
+		char aTemp[16];
+		str_format(aTemp, sizeof(aTemp), "%d", pSelectedServer->m_Latency);
+		RightColumn.HSplitTop(15.0f, &Row, &RightColumn);
+		TextRender()->SetCursor(&Cursor, Row.x, Row.y, FontSize, TEXTFLAG_RENDER|TEXTFLAG_STOP_AT_END);
+		Cursor.m_LineWidth = Row.w;
+		TextRender()->TextEx(&Cursor, aTemp, -1);
+
+	}
 
 	// server scoreboard
-	ServerScoreboard.HSplitTop(GetListHeaderHeight(), &ServerHeader, &ServerScoreboard);
-	RenderTools()->DrawUIRect(&ServerHeader, vec4(1, 1, 1, 0.25f), CUI::CORNER_T, 4.0f);
-	ServerHeader.HMargin(2.0f, &ServerHeader);
-	UI()->DoLabel(&ServerHeader, Localize("Scoreboard"), 12.0f, CUI::ALIGN_CENTER);
-	RenderDetailScoreboard(ServerScoreboard, pInfo, 0, CUI::ms_DefaultTextColor, CUI::ms_DefaultTextOutlineColor);
+	ServerScoreBoard.HSplitBottom(20.0f, &ServerScoreBoard, 0x0);
+	ServerScoreBoard.HSplitTop(ms_ListheaderHeight, &ServerHeader, &ServerScoreBoard);
+	RenderTools()->DrawUIRect(&ServerHeader, vec4(1,1,1,0.25f), CUI::CORNER_T, 4.0f);
+	RenderTools()->DrawUIRect(&ServerScoreBoard, vec4(0,0,0,0.15f), CUI::CORNER_B, 4.0f);
+	UI()->DoLabelScaled(&ServerHeader, Localize("Scoreboard"), FontSize+2.0f, 0);
+
+	if(pSelectedServer)
+	{
+		ServerScoreBoard.Margin(3.0f, &ServerScoreBoard);
+		for (int i = 0; i < pSelectedServer->m_NumClients; i++)
+		{
+			CUIRect Name, Clan, Score, Flag;
+			ServerScoreBoard.HSplitTop(25.0f, &Name, &ServerScoreBoard);
+			if(UI()->DoButtonLogic(&pSelectedServer->m_aClients[i], "", 0, &Name))
+			{
+				if(pSelectedServer->m_aClients[i].m_FriendState == IFriends::FRIEND_PLAYER)
+					m_pClient->Friends()->RemoveFriend(pSelectedServer->m_aClients[i].m_aName, pSelectedServer->m_aClients[i].m_aClan);
+				else
+					m_pClient->Friends()->AddFriend(pSelectedServer->m_aClients[i].m_aName, pSelectedServer->m_aClients[i].m_aClan);
+				FriendlistOnUpdate();
+				Client()->ServerBrowserUpdate();
+			}
+
+			vec4 Colour = pSelectedServer->m_aClients[i].m_FriendState == IFriends::FRIEND_NO ? vec4(1.0f, 1.0f, 1.0f, (i%2+1)*0.05f) :
+																								vec4(0.5f, 1.0f, 0.5f, 0.15f+(i%2+1)*0.05f);
+			RenderTools()->DrawUIRect(&Name, Colour, CUI::CORNER_ALL, 4.0f);
+			Name.VSplitLeft(5.0f, 0, &Name);
+			Name.VSplitLeft(30.0f, &Score, &Name);
+			Name.VSplitRight(34.0f, &Name, &Flag);
+			Flag.HMargin(4.0f, &Flag);
+			Name.HSplitTop(11.0f, &Name, &Clan);
+
+			// score
+			if(pSelectedServer->m_aClients[i].m_Player)
+			{
+				char aTemp[16];
+				str_format(aTemp, sizeof(aTemp), "%d", pSelectedServer->m_aClients[i].m_Score);
+				TextRender()->SetCursor(&Cursor, Score.x, Score.y+(Score.h-FontSize)/4.0f, FontSize, TEXTFLAG_RENDER|TEXTFLAG_STOP_AT_END);
+				Cursor.m_LineWidth = Score.w;
+				TextRender()->TextEx(&Cursor, aTemp, -1);
+			}
+
+			// name
+			TextRender()->SetCursor(&Cursor, Name.x, Name.y, FontSize-2, TEXTFLAG_RENDER|TEXTFLAG_STOP_AT_END);
+			Cursor.m_LineWidth = Name.w;
+			const char *pName = pSelectedServer->m_aClients[i].m_aName;
+			if(g_Config.m_BrFilterString[0])
+			{
+				// highlight the parts that matches
+				const char *s = str_find_nocase(pName, g_Config.m_BrFilterString);
+				if(s)
+				{
+					TextRender()->TextEx(&Cursor, pName, (int)(s-pName));
+					TextRender()->TextColor(0.4f, 0.4f, 1.0f, 1.0f);
+					TextRender()->TextEx(&Cursor, s, str_length(g_Config.m_BrFilterString));
+					TextRender()->TextColor(1.0f, 1.0f, 1.0f, 1.0f);
+					TextRender()->TextEx(&Cursor, s+str_length(g_Config.m_BrFilterString), -1);
+				}
+				else
+					TextRender()->TextEx(&Cursor, pName, -1);
+			}
+			else
+				TextRender()->TextEx(&Cursor, pName, -1);
+
+			// clan
+			TextRender()->SetCursor(&Cursor, Clan.x, Clan.y, FontSize-2, TEXTFLAG_RENDER|TEXTFLAG_STOP_AT_END);
+			Cursor.m_LineWidth = Clan.w;
+			const char *pClan = pSelectedServer->m_aClients[i].m_aClan;
+			if(g_Config.m_BrFilterString[0])
+			{
+				// highlight the parts that matches
+				const char *s = str_find_nocase(pClan, g_Config.m_BrFilterString);
+				if(s)
+				{
+					TextRender()->TextEx(&Cursor, pClan, (int)(s-pClan));
+					TextRender()->TextColor(0.4f, 0.4f, 1.0f, 1.0f);
+					TextRender()->TextEx(&Cursor, s, str_length(g_Config.m_BrFilterString));
+					TextRender()->TextColor(1.0f, 1.0f, 1.0f, 1.0f);
+					TextRender()->TextEx(&Cursor, s+str_length(g_Config.m_BrFilterString), -1);
+				}
+				else
+					TextRender()->TextEx(&Cursor, pClan, -1);
+			}
+			else
+				TextRender()->TextEx(&Cursor, pClan, -1);
+
+			// flag
+			vec4 Color(1.0f, 1.0f, 1.0f, 0.5f);
+			m_pClient->m_pCountryFlags->Render(pSelectedServer->m_aClients[i].m_Country, &Color, Flag.x, Flag.y, Flag.w, Flag.h);
+		}
+	}
 }
 
 void CMenus::FriendlistOnUpdate()
 {
-	// fill me
+	m_lFriends.clear();
+	for(int i = 0; i < m_pClient->Friends()->NumFriends(); ++i)
+	{
+		CFriendItem Item;
+		Item.m_pFriendInfo = m_pClient->Friends()->GetFriend(i);
+		Item.m_NumFound = 0;
+		m_lFriends.add_unsorted(Item);
+	}
+	m_lFriends.sort_range();
 }
 
-void CMenus::RenderServerbrowserBottomBox(CUIRect MainView)
+void CMenus::RenderServerbrowserFriends(CUIRect View)
 {
-	// same size like tabs in top but variables not really needed
-	float Spacing = 3.0f;
-	float ButtonWidth = MainView.w/2.0f-Spacing/2.0f;
-
-	// render background
-	RenderBackgroundShadow(&MainView, true);
-
-	// back to main menu
-	CUIRect Button;
-	MainView.HSplitTop(25.0f, &MainView, 0);
-	MainView.VSplitLeft(ButtonWidth, &Button, &MainView);
-	static CButtonContainer s_RefreshButton;
-	if(DoButton_Menu(&s_RefreshButton, Localize("Refresh"), 0, &Button) || (Input()->KeyPress(KEY_R) && (Input()->KeyIsPressed(KEY_LCTRL) || Input()->KeyIsPressed(KEY_RCTRL))))
+	static int s_Inited = 0;
+	if(!s_Inited)
 	{
-		if(m_MenuPage == PAGE_INTERNET)
-			ServerBrowser()->Refresh(IServerBrowser::REFRESHFLAG_INTERNET);
-		else if(m_MenuPage == PAGE_LAN)
-			ServerBrowser()->Refresh(IServerBrowser::REFRESHFLAG_LAN);
+		FriendlistOnUpdate();
+		s_Inited = 1;
 	}
 
-	MainView.VSplitLeft(Spacing, 0, &MainView); // little space
-	MainView.VSplitLeft(ButtonWidth, &Button, &MainView);
-	static CButtonContainer s_JoinButton;
-	if(DoButton_Menu(&s_JoinButton, Localize("Connect"), 0, &Button) || m_EnterPressed)
-	{
-		Client()->Connect(GetServerBrowserAddress());
-		m_EnterPressed = false;
-	}
-}
+	CUIRect ServerFriends = View, FilterHeader;
+	const float FontSize = 10.0f;
 
-void CMenus::DoGameIcon(const char *pName, const CUIRect *pRect)
-{
-	char aNameBuf[128];
-	str_copy(aNameBuf, pName, sizeof(aNameBuf));
-	str_sanitize_filename(aNameBuf);
+	// header
+	ServerFriends.HSplitTop(ms_ListheaderHeight, &FilterHeader, &ServerFriends);
+	RenderTools()->DrawUIRect(&FilterHeader, vec4(1,1,1,0.25f), CUI::CORNER_T, 4.0f);
+	RenderTools()->DrawUIRect(&ServerFriends, vec4(0,0,0,0.15f), 0, 4.0f);
+	UI()->DoLabelScaled(&FilterHeader, Localize("Friends"), FontSize+4.0f, 0);
+	CUIRect Button, List;
 
-	// get texture
-	IGraphics::CTextureHandle Tex = m_GameIconDefault;
-	for(int i = 0; i < m_lGameIcons.size(); ++i)
+	ServerFriends.Margin(3.0f, &ServerFriends);
+	ServerFriends.VMargin(3.0f, &ServerFriends);
+	ServerFriends.HSplitBottom(100.0f, &List, &ServerFriends);
+
+	// friends list(remove friend)
+	static float s_ScrollValue = 0;
+	if(m_FriendlistSelectedIndex >= m_lFriends.size())
+		m_FriendlistSelectedIndex = m_lFriends.size()-1;
+	UiDoListboxStart(&m_lFriends, &List, 30.0f, "", "", m_lFriends.size(), 1, m_FriendlistSelectedIndex, s_ScrollValue);
+
+	m_lFriends.sort_range();
+	for(int i = 0; i < m_lFriends.size(); ++i)
 	{
-		if(!str_comp_nocase(aNameBuf, m_lGameIcons[i].m_Name))
+		CListboxItem Item = UiDoListboxNextItem(&m_lFriends[i]);
+
+		if(Item.m_Visible)
 		{
-			Tex = m_lGameIcons[i].m_IconTexture;
-			break;
+			Item.m_Rect.Margin(1.5f, &Item.m_Rect);
+			CUIRect OnState;
+			Item.m_Rect.VSplitRight(30.0f, &Item.m_Rect, &OnState);
+			RenderTools()->DrawUIRect(&Item.m_Rect, vec4(1.0f, 1.0f, 1.0f, 0.1f), CUI::CORNER_L, 4.0f);
+
+			Item.m_Rect.VMargin(2.5f, &Item.m_Rect);
+			Item.m_Rect.HSplitTop(12.0f, &Item.m_Rect, &Button);
+			UI()->DoLabelScaled(&Item.m_Rect, m_lFriends[i].m_pFriendInfo->m_aName, FontSize, -1);
+			UI()->DoLabelScaled(&Button, m_lFriends[i].m_pFriendInfo->m_aClan, FontSize, -1);
+
+			RenderTools()->DrawUIRect(&OnState, m_lFriends[i].m_NumFound ? vec4(0.0f, 1.0f, 0.0f, 0.25f) : vec4(1.0f, 0.0f, 0.0f, 0.25f), CUI::CORNER_R, 4.0f);
+			OnState.HMargin((OnState.h-FontSize)/3, &OnState);
+			OnState.VMargin(5.0f, &OnState);
+			char aBuf[64];
+			str_format(aBuf, sizeof(aBuf), "%i", m_lFriends[i].m_NumFound);
+			UI()->DoLabelScaled(&OnState, aBuf, FontSize+2, 1);
 		}
 	}
 
-	// draw icon
-	Graphics()->TextureSet(Tex);
-	Graphics()->QuadsBegin();
-	IGraphics::CQuadItem QuadItem(pRect->x, pRect->y, pRect->w, pRect->h);
-	Graphics()->QuadsDrawTL(&QuadItem, 1);
-	Graphics()->QuadsEnd();
-}
+	bool Activated = false;
+	m_FriendlistSelectedIndex = UiDoListboxEnd(&s_ScrollValue, &Activated);
 
-int CMenus::GameIconScan(const char *pName, int IsDir, int DirType, void *pUser)
-{
-	CMenus *pSelf = (CMenus *)pUser;
-	const char *pSuffix = str_endswith(pName, ".png");
-	if(IsDir || !pSuffix)
+	// activate found server with friend
+	if(Activated && !m_EnterPressed && m_lFriends[m_FriendlistSelectedIndex].m_NumFound)
 	{
-		return 0;
+		bool Found = false;
+		int NumServers = ServerBrowser()->NumSortedServers();
+		for (int i = 0; i < NumServers && !Found; i++)
+		{
+			int ItemIndex = m_SelectedIndex != -1 ? (m_SelectedIndex+i+1)%NumServers : i;
+			const CServerInfo *pItem = ServerBrowser()->SortedGet(ItemIndex);
+			if(pItem->m_FriendState != IFriends::FRIEND_NO)
+			{
+				for(int j = 0; j < pItem->m_NumClients && !Found; ++j)
+				{
+					if(pItem->m_aClients[j].m_FriendState != IFriends::FRIEND_NO &&
+						str_quickhash(pItem->m_aClients[j].m_aClan) == m_lFriends[m_FriendlistSelectedIndex].m_pFriendInfo->m_ClanHash &&
+						(!m_lFriends[m_FriendlistSelectedIndex].m_pFriendInfo->m_aName[0] ||
+						str_quickhash(pItem->m_aClients[j].m_aName) == m_lFriends[m_FriendlistSelectedIndex].m_pFriendInfo->m_NameHash))
+					{
+						str_copy(g_Config.m_UiServerAddress, pItem->m_aAddress, sizeof(g_Config.m_UiServerAddress));
+						m_ScrollOffset = ItemIndex;
+						m_SelectedIndex = ItemIndex;
+						Found = true;
+					}
+				}
+			}
+		}
 	}
-	char aGameIconName[128];
-	str_truncate(aGameIconName, sizeof(aGameIconName), pName, pSuffix - pName);
 
-	// add new game icon
-	char aBuf[IO_MAX_PATH_LENGTH];
-	str_format(aBuf, sizeof(aBuf), "ui/gametypes/%s", pName);
-	CImageInfo Info;
-	if(!pSelf->Graphics()->LoadPNG(&Info, aBuf, DirType) || Info.m_Width != CGameIcon::GAMEICON_SIZE || (Info.m_Height != CGameIcon::GAMEICON_SIZE && Info.m_Height != CGameIcon::GAMEICON_OLDHEIGHT))
+	ServerFriends.HSplitTop(2.5f, 0, &ServerFriends);
+	ServerFriends.HSplitTop(20.0f, &Button, &ServerFriends);
+	if(m_FriendlistSelectedIndex != -1)
 	{
-		str_format(aBuf, sizeof(aBuf), "failed to load gametype icon '%s'", aGameIconName);
-		pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "game", aBuf);
-		return 0;
+		static int s_RemoveButton = 0;
+		if(DoButton_Menu(&s_RemoveButton, Localize("Remove"), 0, &Button))
+			m_Popup = POPUP_REMOVE_FRIEND;
 	}
-	CGameIcon GameIcon(aGameIconName);
-	str_format(aBuf, sizeof(aBuf), "loaded gametype icon '%s'", aGameIconName);
-	pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "game", aBuf);
 
-	GameIcon.m_IconTexture = pSelf->Graphics()->LoadTextureRaw(CGameIcon::GAMEICON_SIZE, CGameIcon::GAMEICON_SIZE, Info.m_Format, Info.m_pData, Info.m_Format, IGraphics::TEXLOAD_LINEARMIPMAPS);
-	pSelf->m_lGameIcons.add(GameIcon);
-	if(!str_comp_nocase(aGameIconName, "mod"))
-		pSelf->m_GameIconDefault = GameIcon.m_IconTexture;
-	return 0;
+	// add friend
+	if(m_pClient->Friends()->NumFriends() < IFriends::MAX_FRIENDS)
+	{
+		ServerFriends.HSplitTop(10.0f, 0, &ServerFriends);
+		ServerFriends.HSplitTop(19.0f, &Button, &ServerFriends);
+		char aBuf[64];
+		str_format(aBuf, sizeof(aBuf), "%s:", Localize("Name"));
+		UI()->DoLabelScaled(&Button, aBuf, FontSize, -1);
+		Button.VSplitLeft(80.0f, 0, &Button);
+		static char s_aName[MAX_NAME_LENGTH] = {0};
+		static float s_OffsetName = 0.0f;
+		DoEditBox(&s_aName, &Button, s_aName, sizeof(s_aName), FontSize, &s_OffsetName);
+
+		ServerFriends.HSplitTop(3.0f, 0, &ServerFriends);
+		ServerFriends.HSplitTop(19.0f, &Button, &ServerFriends);
+		str_format(aBuf, sizeof(aBuf), "%s:", Localize("Clan"));
+		UI()->DoLabelScaled(&Button, aBuf, FontSize, -1);
+		Button.VSplitLeft(80.0f, 0, &Button);
+		static char s_aClan[MAX_CLAN_LENGTH] = {0};
+		static float s_OffsetClan = 0.0f;
+		DoEditBox(&s_aClan, &Button, s_aClan, sizeof(s_aClan), FontSize, &s_OffsetClan);
+
+		ServerFriends.HSplitTop(3.0f, 0, &ServerFriends);
+		ServerFriends.HSplitTop(20.0f, &Button, &ServerFriends);
+		static int s_AddButton = 0;
+		if(DoButton_Menu(&s_AddButton, Localize("Add Friend"), 0, &Button))
+		{
+			m_pClient->Friends()->AddFriend(s_aName, s_aClan);
+			FriendlistOnUpdate();
+			Client()->ServerBrowserUpdate();
+		}
+	}
 }
 
 void CMenus::RenderServerbrowser(CUIRect MainView)
 {
 	/*
-		+---------------------------+-------+
-		|							|		|
-		|							| side-	|
-		|		server list			| bar	|
-		|							| <->	|
-		|---------------------------+-------+
-		| back |	   | bottom box |
-		+------+       +------------+
+		+-----------------+	+-------+
+		|				  |	|		|
+		|				  |	| tool	|
+		|   server list	  |	| box 	|
+		|				  |	|	  	|
+		|				  |	|		|
+		+-----------------+	|	 	|
+			status box	tab	+-------+
 	*/
 
-	CUIRect ServerList, Sidebar, BottomBox, SidebarButton;
+	CUIRect ServerList, ToolBox, StatusBox, TabBar;
 
-	if(Client()->State() == IClient::STATE_OFFLINE)
-		MainView.HSplitTop(20.0f, 0, &MainView);
-	MainView.HSplitBottom(80.0f, &MainView, &BottomBox);
-	MainView.VSplitRight(20.0f, &ServerList, &SidebarButton);
+	// background
+	RenderTools()->DrawUIRect(&MainView, ms_ColorTabbarActive, CUI::CORNER_ALL, 10.0f);
+	MainView.Margin(10.0f, &MainView);
 
-	if(m_SidebarActive)
-		ServerList.VSplitRight(150.0f, &ServerList, &Sidebar);
+	// create server list, status box, tab bar and tool box area
+	MainView.VSplitRight(205.0f, &ServerList, &ToolBox);
+	ServerList.HSplitBottom(70.0f, &ServerList, &StatusBox);
+	StatusBox.VSplitRight(100.0f, &StatusBox, &TabBar);
+	ServerList.VSplitRight(5.0f, &ServerList, 0);
 
 	// server list
-	RenderServerbrowserServerList(ServerList);
-
-	// sidebar
-	if(m_SidebarActive)
-		RenderServerbrowserSidebar(Sidebar);
-
-	// sidebar button
-	SidebarButton.HMargin(150.0f, &SidebarButton);
-	static CButtonContainer s_SidebarButton;
-	if(DoButton_SpriteID(&s_SidebarButton, IMAGE_ARROWICONS, m_SidebarActive?SPRITE_ARROW_RIGHT_A:SPRITE_ARROW_LEFT_A, false, &SidebarButton, CUI::CORNER_R, 5.0f, true))
 	{
-		m_SidebarActive ^= 1;
+		RenderServerbrowserServerList(ServerList);
 	}
 
-	// back button
-	BottomBox.HSplitTop(20.0f, 0, &BottomBox);
-	MainView = BottomBox;
-	RenderBackButton(MainView);
+	int ToolboxPage = g_Config.m_UiToolboxPage;
 
-	// connect box
-	float Spacing = 3.0f;
-	float ButtonWidth = (BottomBox.w/6.0f)-(Spacing*5.0)/6.0f;
-	BottomBox.VSplitRight(20.0f, &BottomBox, 0);
-	BottomBox.VSplitRight(ButtonWidth*2.0f+Spacing, 0, &BottomBox);
-
-	RenderServerbrowserBottomBox(BottomBox);
-
-	// render overlay if there is any
-	RenderServerbrowserOverlay();
-}
-
-void CMenus::UpdateServerBrowserAddress()
-{
-	const CServerInfo *pItem = GetSelectedServerInfo();
-	SetServerBrowserAddress(pItem ? pItem->m_aAddress : "");
-}
-
-const char *CMenus::GetServerBrowserAddress()
-{
-	const int Type = ServerBrowser()->GetType();
-	if(Type == IServerBrowser::TYPE_INTERNET)
-		return Config()->m_UiServerAddress;
-	else if(Type == IServerBrowser::TYPE_LAN)
-		return Config()->m_UiServerAddressLan;
-	return 0;
-}
-
-void CMenus::SetServerBrowserAddress(const char *pAddress)
-{
-	const int Type = ServerBrowser()->GetType();
-	if(Type == IServerBrowser::TYPE_INTERNET)
-		str_copy(Config()->m_UiServerAddress, pAddress, sizeof(Config()->m_UiServerAddress));
-	else if(Type == IServerBrowser::TYPE_LAN)
-		str_copy(Config()->m_UiServerAddressLan, pAddress, sizeof(Config()->m_UiServerAddressLan));
-}
-
-void CMenus::ServerBrowserFilterOnUpdate()
-{
-	m_AddressSelection |= ADDR_SELECTION_CHANGE | ADDR_SELECTION_RESET_SERVER_IF_NOT_FOUND;
-}
-
-void CMenus::ServerBrowserSortingOnUpdate()
-{
-	m_AddressSelection |= ADDR_SELECTION_CHANGE | ADDR_SELECTION_RESET_SERVER_IF_NOT_FOUND;
-}
-
-void CMenus::ConchainConnect(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
-{
-	if(pResult->NumArguments() == 1)
+	// tab bar
 	{
-		CMenus *pMenus = (CMenus*)pUserData;
-		pMenus->SetServerBrowserAddress(pResult->GetString(0));
-		pMenus->m_AddressSelection |= ADDR_SELECTION_CHANGE | ADDR_SELECTION_RESET_SERVER_IF_NOT_FOUND;
+		CUIRect TabButton0, TabButton1, TabButton2;
+		TabBar.HSplitTop(5.0f, 0, &TabBar);
+		TabBar.HSplitTop(20.0f, &TabButton0, &TabBar);
+		TabBar.HSplitTop(2.5f, 0, &TabBar);
+		TabBar.HSplitTop(20.0f, &TabButton1, &TabBar);
+		TabBar.HSplitTop(2.5f, 0, &TabBar);
+		TabBar.HSplitTop(20.0f, &TabButton2, 0);
+		vec4 Active = ms_ColorTabbarActive;
+		vec4 InActive = ms_ColorTabbarInactive;
+		ms_ColorTabbarActive = vec4(0.0f, 0.0f, 0.0f, 0.3f);
+		ms_ColorTabbarInactive = vec4(0.0f, 0.0f, 0.0f, 0.15f);
+
+		static int s_FiltersTab = 0;
+		if (DoButton_MenuTab(&s_FiltersTab, Localize("Filter"), ToolboxPage==0, &TabButton0, CUI::CORNER_L))
+			ToolboxPage = 0;
+
+		static int s_InfoTab = 0;
+		if (DoButton_MenuTab(&s_InfoTab, Localize("Info"), ToolboxPage==1, &TabButton1, CUI::CORNER_L))
+			ToolboxPage = 1;
+
+		static int s_FriendsTab = 0;
+		if (DoButton_MenuTab(&s_FriendsTab, Localize("Friends"), ToolboxPage==2, &TabButton2, CUI::CORNER_L))
+			ToolboxPage = 2;
+
+		ms_ColorTabbarActive = Active;
+		ms_ColorTabbarInactive = InActive;
+		g_Config.m_UiToolboxPage = ToolboxPage;
 	}
-	pfnCallback(pResult, pCallbackUserData);
+
+	// tool box
+	{
+		RenderTools()->DrawUIRect(&ToolBox, vec4(0.0f, 0.0f, 0.0f, 0.15f), CUI::CORNER_T, 4.0f);
+
+
+		if(ToolboxPage == 0)
+			RenderServerbrowserFilters(ToolBox);
+		else if(ToolboxPage == 1)
+			RenderServerbrowserServerDetail(ToolBox);
+		else if(ToolboxPage == 2)
+			RenderServerbrowserFriends(ToolBox);
+	}
+
+	// status box
+	{
+		CUIRect Button, ButtonArea;
+		StatusBox.HSplitTop(5.0f, 0, &StatusBox);
+
+		// version note
+		StatusBox.HSplitBottom(15.0f, &StatusBox, &Button);
+		char aBuf[64];
+		if(str_comp(Client()->LatestVersion(), "0") != 0)
+		{
+			str_format(aBuf, sizeof(aBuf), Localize("Teeworlds %s is out! Download it at www.teeworlds.com!"), Client()->LatestVersion());
+			TextRender()->TextColor(1.0f, 0.4f, 0.4f, 1.0f);
+		}
+		else
+			str_format(aBuf, sizeof(aBuf), Localize("Current version: %s"), GAME_VERSION);
+		UI()->DoLabelScaled(&Button, aBuf, 14.0f, -1);
+		TextRender()->TextColor(1.0f, 1.0f, 1.0f, 1.0f);
+
+		// button area
+		StatusBox.VSplitRight(80.0f, &StatusBox, 0);
+		StatusBox.VSplitRight(170.0f, &StatusBox, &ButtonArea);
+		ButtonArea.VSplitRight(150.0f, 0, &ButtonArea);
+		ButtonArea.HSplitTop(20.0f, &Button, &ButtonArea);
+		Button.VMargin(2.0f, &Button);
+
+		static int s_RefreshButton = 0;
+		if(DoButton_Menu(&s_RefreshButton, Localize("Refresh"), 0, &Button))
+		{
+			if(g_Config.m_UiPage == PAGE_INTERNET)
+				ServerBrowser()->Refresh(IServerBrowser::TYPE_INTERNET);
+			else if(g_Config.m_UiPage == PAGE_LAN)
+				ServerBrowser()->Refresh(IServerBrowser::TYPE_LAN);
+			else if(g_Config.m_UiPage == PAGE_FAVORITES)
+				ServerBrowser()->Refresh(IServerBrowser::TYPE_FAVORITES);
+		}
+
+		ButtonArea.HSplitTop(5.0f, 0, &ButtonArea);
+		ButtonArea.HSplitTop(20.0f, &Button, &ButtonArea);
+		Button.VMargin(2.0f, &Button);
+
+		static int s_JoinButton = 0;
+		if(DoButton_Menu(&s_JoinButton, Localize("Connect"), 0, &Button) || m_EnterPressed)
+		{
+			Client()->Connect(g_Config.m_UiServerAddress);
+			m_EnterPressed = false;
+		}
+
+		// address info
+		StatusBox.VSplitLeft(20.0f, 0, &StatusBox);
+		StatusBox.HSplitTop(20.0f, &Button, &StatusBox);
+		UI()->DoLabelScaled(&Button, Localize("Host address"), 14.0f, -1);
+		StatusBox.HSplitTop(20.0f, &Button, 0);
+		static float Offset = 0.0f;
+		DoEditBox(&g_Config.m_UiServerAddress, &Button, g_Config.m_UiServerAddress, sizeof(g_Config.m_UiServerAddress), 14.0f, &Offset);
+	}
 }
 
 void CMenus::ConchainFriendlistUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
@@ -2434,13 +1065,6 @@ void CMenus::ConchainFriendlistUpdate(IConsole::IResult *pResult, void *pUserDat
 void CMenus::ConchainServerbrowserUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
 {
 	pfnCallback(pResult, pCallbackUserData);
-	CMenus *pMenus = (CMenus*)pUserData;
-	pMenus->ServerBrowserFilterOnUpdate();
-}
-
-void CMenus::ConchainServerbrowserSortingUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
-{
-	pfnCallback(pResult, pCallbackUserData);
-	CMenus *pMenus = (CMenus*)pUserData;
-	pMenus->ServerBrowserSortingOnUpdate();
+	if(pResult->NumArguments() && g_Config.m_UiPage == PAGE_FAVORITES && ((CMenus *)pUserData)->Client()->State() == IClient::STATE_OFFLINE)
+		((CMenus *)pUserData)->ServerBrowser()->Refresh(IServerBrowser::TYPE_FAVORITES);
 }

@@ -14,7 +14,6 @@ class CGameConsole : public CComponent
 		struct CBacklogEntry
 		{
 			float m_YOffset;
-			bool m_Highlighted;
 			char m_aText[1];
 		};
 		TStaticRingBuffer<CBacklogEntry, 64*1024, CRingBufferBase::FLAG_RECYCLE> m_Backlog;
@@ -22,20 +21,16 @@ class CGameConsole : public CComponent
 		char *m_pHistoryEntry;
 
 		CLineInput m_Input;
-		const char *m_pName;
 		int m_Type;
+		int m_CompletionEnumerationCount;
 		int m_BacklogActPage;
 
+	public:
 		CGameConsole *m_pGameConsole;
-
-		char m_aCompletionMapBuffer[128];
-		int m_CompletionMapChosen;
-		int m_CompletionMapEnumerationCount;
 
 		char m_aCompletionBuffer[128];
 		int m_CompletionChosen;
 		int m_CompletionFlagmask;
-		int m_CompletionEnumerationCount;
 		float m_CompletionRenderOffset;
 
 		bool m_IsCommand;
@@ -48,16 +43,14 @@ class CGameConsole : public CComponent
 
 		void ClearBacklog();
 		void ClearHistory();
-		void Reset() { m_CompletionRenderOffset = 0; }
 
 		void ExecuteLine(const char *pLine);
 
 		void OnInput(IInput::CEvent Event);
-		void PrintLine(const char *pLine, bool Highlighted);
+		void PrintLine(const char *pLine);
 
 		const char *GetString() const { return m_Input.GetString(); }
 		static void PossibleCommandsCompleteCallback(const char *pStr, void *pUser);
-		static void PossibleMapsCompleteCallback(const char *pStr, void *pUser);
 	};
 
 	class IConsole *m_pConsole;
@@ -78,7 +71,7 @@ class CGameConsole : public CComponent
 	void Dump(int Type);
 
 	static void PossibleCommandsRenderCallback(const char *pStr, void *pUser);
-	static void ClientConsolePrintCallback(const char *pStr, void *pUserData, bool Highlighted);
+	static void ClientConsolePrintCallback(const char *pStr, void *pUserData);
 	static void ConToggleLocalConsole(IConsole::IResult *pResult, void *pUserData);
 	static void ConToggleRemoteConsole(IConsole::IResult *pResult, void *pUserData);
 	static void ConClearLocalConsole(IConsole::IResult *pResult, void *pUserData);
@@ -96,7 +89,6 @@ public:
 
 	CGameConsole();
 
-	bool IsConsoleActive();
 	void PrintLine(int Type, const char *pLine);
 
 	virtual void OnStateChange(int NewState, int OldState);

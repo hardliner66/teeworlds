@@ -2,9 +2,10 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include <engine/graphics.h>
 #include <engine/shared/config.h>
-#include <generated/protocol.h>
-#include <generated/client_data.h>
+#include <game/generated/protocol.h>
+#include <game/generated/client_data.h>
 
+#include <game/gamecore.h> // get_angle
 #include <game/client/ui.h>
 #include <game/client/render.h>
 #include "emoticon.h"
@@ -29,7 +30,7 @@ void CEmoticon::ConEmote(IConsole::IResult *pResult, void *pUserData)
 void CEmoticon::OnConsoleInit()
 {
 	Console()->Register("+emote", "", CFGFLAG_CLIENT, ConKeyEmoticon, this, "Open emote selector");
-	Console()->Register("emote", "i[emote-id]", CFGFLAG_CLIENT, ConEmote, this, "Use emote");
+	Console()->Register("emote", "i", CFGFLAG_CLIENT, ConEmote, this, "Use emote");
 }
 
 void CEmoticon::OnReset()
@@ -48,13 +49,13 @@ void CEmoticon::OnMessage(int MsgType, void *pRawMsg)
 {
 }
 
-bool CEmoticon::OnCursorMove(float x, float y, int CursorType)
+bool CEmoticon::OnMouseMove(float x, float y)
 {
 	if(!m_Active)
 		return false;
 
-	UI()->ConvertCursorMove(&x, &y, CursorType);
-	m_SelectorMouse += vec2(x, y);
+	UI()->ConvertMouseMove(&x, &y);
+	m_SelectorMouse += vec2(x,y);
 	return true;
 }
 
@@ -93,13 +94,6 @@ void CEmoticon::DrawCircle(float x, float y, float r, int Segments)
 
 void CEmoticon::OnRender()
 {
-	if(Client()->State() < IClient::STATE_ONLINE)
-	{
-		m_Active = false;
-		m_WasActive = false;
-		return;
-	}
-
 	if(!m_Active)
 	{
 		if(m_WasActive && m_SelectedEmote != -1)
@@ -108,7 +102,7 @@ void CEmoticon::OnRender()
 		return;
 	}
 
-	if(m_pClient->m_Snap.m_SpecInfo.m_Active || (m_pClient->m_Snap.m_pGameData && m_pClient->m_Snap.m_pGameData->m_GameStateFlags&GAMESTATEFLAG_GAMEOVER))
+	if(m_pClient->m_Snap.m_SpecInfo.m_Active)
 	{
 		m_Active = false;
 		m_WasActive = false;
@@ -120,14 +114,12 @@ void CEmoticon::OnRender()
 	if (length(m_SelectorMouse) > 170.0f)
 		m_SelectorMouse = normalize(m_SelectorMouse) * 170.0f;
 
-	float SelectedAngle = angle(m_SelectorMouse) + 2*pi/24;
+	float SelectedAngle = GetAngle(m_SelectorMouse) + 2*pi/24;
 	if (SelectedAngle < 0)
 		SelectedAngle += 2*pi;
 
 	if (length(m_SelectorMouse) > 110.0f)
 		m_SelectedEmote = (int)(SelectedAngle / (2*pi) * NUM_EMOTICONS);
-	else
-		m_SelectedEmote = -1;
 
 	CUIRect Screen = *UI()->Screen();
 
@@ -135,7 +127,7 @@ void CEmoticon::OnRender()
 
 	Graphics()->BlendNormal();
 
-	Graphics()->TextureClear();
+	Graphics()->TextureSet(-1);
 	Graphics()->QuadsBegin();
 	Graphics()->SetColor(0,0,0,0.3f);
 	DrawCircle(Screen.w/2, Screen.h/2, 190.0f, 64);
@@ -164,13 +156,11 @@ void CEmoticon::OnRender()
 	Graphics()->QuadsEnd();
 
 	Graphics()->TextureSet(g_pData->m_aImages[IMAGE_CURSOR].m_Id);
-	Graphics()->WrapClamp();
 	Graphics()->QuadsBegin();
 	Graphics()->SetColor(1,1,1,1);
 	IGraphics::CQuadItem QuadItem(m_SelectorMouse.x+Screen.w/2,m_SelectorMouse.y+Screen.h/2,24,24);
 	Graphics()->QuadsDrawTL(&QuadItem, 1);
 	Graphics()->QuadsEnd();
-	Graphics()->WrapNormal();
 }
 
 void CEmoticon::Emote(int Emoticon)

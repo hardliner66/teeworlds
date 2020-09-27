@@ -2,7 +2,7 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #include <math.h>
 
-#include <generated/client_data.h>
+#include <game/generated/client_data.h>
 
 #include <base/system.h>
 
@@ -43,30 +43,21 @@ CGameConsole::CInstance::CInstance(int Type)
 	m_Type = Type;
 
 	if(Type == CGameConsole::CONSOLETYPE_LOCAL)
-	{
-		m_pName = "local_console";
 		m_CompletionFlagmask = CFGFLAG_CLIENT;
-	}
 	else
-	{
-		m_pName = "remote_console";
 		m_CompletionFlagmask = CFGFLAG_SERVER;
-	}
-
-	m_aCompletionMapBuffer[0] = 0;
-	m_CompletionMapChosen = -1;
 
 	m_aCompletionBuffer[0] = 0;
 	m_CompletionChosen = -1;
 	m_CompletionRenderOffset = 0.0f;
 
 	m_IsCommand = false;
+	m_BacklogActPage = 0;
 }
 
 void CGameConsole::CInstance::Init(CGameConsole *pGameConsole)
 {
 	m_pGameConsole = pGameConsole;
-	m_Input.Init(m_pGameConsole->Input());
 };
 
 void CGameConsole::CInstance::ClearBacklog()
@@ -100,27 +91,6 @@ void CGameConsole::CInstance::PossibleCommandsCompleteCallback(const char *pStr,
 	if(pInstance->m_CompletionChosen == pInstance->m_CompletionEnumerationCount)
 		pInstance->m_Input.Set(pStr);
 	pInstance->m_CompletionEnumerationCount++;
-}
-
-void CGameConsole::CInstance::PossibleMapsCompleteCallback(const char *pStr, void *pUser)
-{
-	CGameConsole::CInstance *pInstance = (CGameConsole::CInstance *)pUser;
-	if(pInstance->m_CompletionMapChosen == pInstance->m_CompletionMapEnumerationCount)
-	{
-		// get command
-		char aBuf[512] = { 0 };
-		const char *pSrc = pInstance->GetString();
-		unsigned i = 0;
-		for(; i < sizeof(aBuf) - 2 && *pSrc && *pSrc != ' '; i++, pSrc++)
-			aBuf[i] = *pSrc;
-		aBuf[i++] = ' ';
-		aBuf[i] = 0;
-
-		// add mapname to current command
-		str_append(aBuf, pStr, sizeof(aBuf));
-		pInstance->m_Input.Set(aBuf);
-	}
-	pInstance->m_CompletionMapEnumerationCount++;
 }
 
 void CGameConsole::CInstance::OnInput(IInput::CEvent Event)
@@ -189,22 +159,6 @@ void CGameConsole::CInstance::OnInput(IInput::CEvent Event)
 					m_pGameConsole->m_pConsole->PossibleCommands(m_aCompletionBuffer, m_CompletionFlagmask, m_Type != CGameConsole::CONSOLETYPE_LOCAL &&
 						m_pGameConsole->Client()->RconAuthed() && m_pGameConsole->Client()->UseTempRconCommands(),	PossibleCommandsCompleteCallback, this);
 				}
-
-				// maplist completion
-				if(str_startswith_nocase(GetString(), "sv_map ") && m_Type != CGameConsole::CONSOLETYPE_LOCAL)
-				{
-					m_CompletionMapChosen++;
-					m_CompletionMapEnumerationCount = 0;
-					m_pGameConsole->m_pConsole->PossibleMaps(m_aCompletionMapBuffer, PossibleMapsCompleteCallback, this);
-					
-					// handle wrapping
-					if(m_CompletionMapEnumerationCount && m_CompletionMapChosen >= m_CompletionMapEnumerationCount)
-					{
-						m_CompletionMapChosen %= m_CompletionMapEnumerationCount;
-						m_CompletionMapEnumerationCount = 0;
-						m_pGameConsole->m_pConsole->PossibleMaps(m_aCompletionMapBuffer, PossibleMapsCompleteCallback, this);
-					}
-				}
 			}
 		}
 		else if(Event.m_Key == KEY_PAGEUP)
@@ -222,18 +176,12 @@ void CGameConsole::CInstance::OnInput(IInput::CEvent Event)
 	if(!Handled)
 		m_Input.ProcessInput(Event);
 
-	if(Event.m_Flags&(IInput::FLAG_PRESS|IInput::FLAG_TEXT))
+	if(Event.m_Flags&IInput::FLAG_PRESS)
 	{
 		if(Event.m_Key != KEY_TAB)
 		{
 			m_CompletionChosen = -1;
 			str_copy(m_aCompletionBuffer, m_Input.GetString(), sizeof(m_aCompletionBuffer));
-
-			if(str_startswith_nocase(GetString(), "sv_map "))
-			{
-				m_CompletionMapChosen = -1;
-				str_copy(m_aCompletionMapBuffer, &m_Input.GetString()[7], sizeof(m_aCompletionBuffer));
-			}
 		}
 
 		// find the current command
@@ -260,16 +208,15 @@ void CGameConsole::CInstance::OnInput(IInput::CEvent Event)
 	}
 }
 
-void CGameConsole::CInstance::PrintLine(const char *pLine, bool Highlighted)
+void CGameConsole::CInstance::PrintLine(const char *pLine)
 {
 	int Len = str_length(pLine);
 
-	if(Len > 255)
+	if (Len > 255)
 		Len = 255;
 
 	CBacklogEntry *pEntry = m_Backlog.Allocate(sizeof(CBacklogEntry)+Len);
 	pEntry->m_YOffset = -1.0f;
-	pEntry->m_Highlighted = Highlighted;
 	mem_copy(pEntry->m_aText, pLine, Len);
 	pEntry->m_aText[Len] = 0;
 }
@@ -298,7 +245,6 @@ CGameConsole::CInstance *CGameConsole::CurrentConsole()
 
 void CGameConsole::OnReset()
 {
-	m_RemoteConsole.Reset();
 }
 
 // only defined for 0<=t<=1
@@ -325,9 +271,12 @@ void CGameConsole::PossibleCommandsRenderCallback(const char *pStr, void *pUser)
 
 	if(pInfo->m_EnumCount == pInfo->m_WantedCompletion)
 	{
-		float tw = pInfo->m_pSelf->TextRender()->TextWidth(pInfo->m_Cursor.m_pFont, pInfo->m_Cursor.m_FontSize, pStr, -1, -1.0f);
-		CUIRect Rect = {pInfo->m_Cursor.m_X-3, pInfo->m_Cursor.m_Y, tw+5, pInfo->m_Cursor.m_FontSize+4};
-		pInfo->m_pSelf->RenderTools()->DrawRoundRect(&Rect, vec4(229.0f/255.0f,185.0f/255.0f,4.0f/255.0f,0.85f), pInfo->m_Cursor.m_FontSize/3);
+		float tw = pInfo->m_pSelf->TextRender()->TextWidth(pInfo->m_Cursor.m_pFont, pInfo->m_Cursor.m_FontSize, pStr, -1);
+		pInfo->m_pSelf->Graphics()->TextureSet(-1);
+		pInfo->m_pSelf->Graphics()->QuadsBegin();
+			pInfo->m_pSelf->Graphics()->SetColor(229.0f/255.0f,185.0f/255.0f,4.0f/255.0f,0.85f);
+			pInfo->m_pSelf->RenderTools()->DrawRoundRect(pInfo->m_Cursor.m_X-3, pInfo->m_Cursor.m_Y, tw+5, pInfo->m_Cursor.m_FontSize+4, pInfo->m_Cursor.m_FontSize/3);
+		pInfo->m_pSelf->Graphics()->QuadsEnd();
 
 		// scroll when out of sight
 		if(pInfo->m_Cursor.m_X < 3.0f)
@@ -380,7 +329,7 @@ void CGameConsole::OnRender()
 		Progress = 1.0f;
 	}
 
-	if (m_ConsoleState == CONSOLE_OPEN && Config()->m_ClEditor)
+	if (m_ConsoleState == CONSOLE_OPEN && g_Config.m_ClEditor)
 		Toggle(CONSOLETYPE_LOCAL);
 
 	if (m_ConsoleState == CONSOLE_CLOSED)
@@ -403,7 +352,7 @@ void CGameConsole::OnRender()
 	Graphics()->MapScreen(Screen.x, Screen.y, Screen.w, Screen.h);
 
 	// do console shadow
-	Graphics()->TextureClear();
+	Graphics()->TextureSet(-1);
 	Graphics()->QuadsBegin();
 	IGraphics::CColorVertex Array[4] = {
 		IGraphics::CColorVertex(0, 0,0,0, 0.5f),
@@ -427,7 +376,7 @@ void CGameConsole::OnRender()
 	Graphics()->QuadsEnd();
 
 	// do small bar shadow
-	Graphics()->TextureClear();
+	Graphics()->TextureSet(-1);
 	Graphics()->QuadsBegin();
 	Array[0] = IGraphics::CColorVertex(0, 0,0,0, 0.0f);
 	Array[1] = IGraphics::CColorVertex(1, 0,0,0, 0.0f);
@@ -472,7 +421,7 @@ void CGameConsole::OnRender()
 		const char *pPrompt = "> ";
 		if(m_ConsoleType == CONSOLETYPE_REMOTE)
 		{
-			if(Client()->State() == IClient::STATE_ONLINE || Client()->State() == IClient::STATE_LOADING)
+			if(Client()->State() == IClient::STATE_ONLINE)
 			{
 				if(Client()->RconAuthed())
 					pPrompt = "rcon> ";
@@ -489,7 +438,7 @@ void CGameConsole::OnRender()
 		//hide rcon password
 		char aInputString[256];
 		str_copy(aInputString, pConsole->m_Input.GetString(), sizeof(aInputString));
-		if(m_ConsoleType == CONSOLETYPE_REMOTE && (Client()->State() == IClient::STATE_ONLINE || Client()->State() == IClient::STATE_LOADING) && !Client()->RconAuthed())
+		if(m_ConsoleType == CONSOLETYPE_REMOTE && Client()->State() == IClient::STATE_ONLINE && !Client()->RconAuthed())
 		{
 			for(int i = 0; i < pConsole->m_Input.GetLength(); ++i)
 				aInputString[i] = '*';
@@ -507,7 +456,7 @@ void CGameConsole::OnRender()
 		Cursor.m_LineWidth = Screen.w - 10.0f - x;
 		
 		TextRender()->TextEx(&Cursor, aInputString, pConsole->m_Input.GetCursorOffset());
-		static float MarkerOffset = TextRender()->TextWidth(0, FontSize, "|", -1, -1.0f)/3;
+		static float MarkerOffset = TextRender()->TextWidth(0, FontSize, "|", -1)/3;
 		CTextCursor Marker = Cursor;
 		Marker.m_X -= MarkerOffset;
 		Marker.m_LineWidth = -1;
@@ -566,10 +515,7 @@ void CGameConsole::OnRender()
 				{
 					TextRender()->SetCursor(&Cursor, 0.0f, y-OffsetY, FontSize, TEXTFLAG_RENDER);
 					Cursor.m_LineWidth = Screen.w-10.0f;
-					if(pEntry->m_Highlighted)
-						TextRender()->TextColor(1,0.75,0.75,1);
 					TextRender()->TextEx(&Cursor, pEntry->m_aText, -1);
-					TextRender()->TextColor(1,1,1,1);
 				}
 				pEntry = pConsole->m_Backlog.Prev(pEntry);
 			}
@@ -594,12 +540,12 @@ void CGameConsole::OnRender()
 		// render page
 		char aBuf[128];
 		str_format(aBuf, sizeof(aBuf), Localize("-Page %d-"), pConsole->m_BacklogActPage+1);
-		TextRender()->Text(0, 10.0f, 0.0f, FontSize, aBuf, -1.0f);
+		TextRender()->Text(0, 10.0f, 0.0f, FontSize, aBuf, -1);
 
 		// render version
-		str_format(aBuf, sizeof(aBuf), "v%s", GAME_RELEASE_VERSION);
-		float Width = TextRender()->TextWidth(0, FontSize, aBuf, -1, -1.0f);
-		TextRender()->Text(0, Screen.w-Width-10.0f, 0.0f, FontSize, aBuf, -1.0f);
+		str_format(aBuf, sizeof(aBuf), "v%s", GAME_VERSION);
+		float Width = TextRender()->TextWidth(0, FontSize, aBuf, -1);
+		TextRender()->Text(0, Screen.w-Width-10.0f, 0.0f, FontSize, aBuf, -1);
 	}
 }
 
@@ -611,7 +557,7 @@ bool CGameConsole::OnInput(IInput::CEvent Event)
 {
 	if(m_ConsoleState == CONSOLE_CLOSED)
 		return false;
-	if((Event.m_Key >= KEY_F1 && Event.m_Key <= KEY_F12) || (Event.m_Key >= KEY_F13 && Event.m_Key <= KEY_F24))
+	if(Event.m_Key >= KEY_F1 && Event.m_Key <= KEY_F15)
 		return false;
 
 	if(Event.m_Key == KEY_ESCAPE && (Event.m_Flags&IInput::FLAG_PRESS))
@@ -645,7 +591,7 @@ void CGameConsole::Toggle(int Type)
 		if (m_ConsoleState == CONSOLE_CLOSED || m_ConsoleState == CONSOLE_CLOSING)
 		{
 			Input()->MouseModeAbsolute();
-			UI()->UseMouseButtons(false);
+			m_pClient->m_pMenus->UseMouseButtons(false);
 			m_ConsoleState = CONSOLE_OPENING;
 			// reset controls
 			m_pClient->m_pControls->OnReset();
@@ -653,7 +599,7 @@ void CGameConsole::Toggle(int Type)
 		else
 		{
 			Input()->MouseModeRelative();
-			UI()->UseMouseButtons(true);
+			m_pClient->m_pMenus->UseMouseButtons(true);
 			m_pClient->OnRelease();
 			m_ConsoleState = CONSOLE_CLOSING;
 		}
@@ -665,26 +611,21 @@ void CGameConsole::Toggle(int Type)
 void CGameConsole::Dump(int Type)
 {
 	CInstance *pConsole = Type == CONSOLETYPE_REMOTE ? &m_RemoteConsole : &m_LocalConsole;
-	char aBuf[256];
 	char aFilename[128];
-	str_timestamp(aBuf, sizeof(aBuf));
-	str_format(aFilename, sizeof(aFilename), "dumps/%s_dump_%s.txt", pConsole->m_pName, aBuf);
-	IOHANDLE File = Storage()->OpenFile(aFilename, IOFLAG_WRITE, IStorage::TYPE_SAVE);
-	if(File)
+	char aDate[20];
+
+	str_timestamp(aDate, sizeof(aDate));
+	str_format(aFilename, sizeof(aFilename), "dumps/%s_dump_%s.txt", Type==CONSOLETYPE_REMOTE?"remote_console":"local_console", aDate);
+	IOHANDLE io = Storage()->OpenFile(aFilename, IOFLAG_WRITE, IStorage::TYPE_SAVE);
+	if(io)
 	{
 		for(CInstance::CBacklogEntry *pEntry = pConsole->m_Backlog.First(); pEntry; pEntry = pConsole->m_Backlog.Next(pEntry))
 		{
-			io_write(File, pEntry->m_aText, str_length(pEntry->m_aText));
-			io_write_newline(File);
+			io_write(io, pEntry->m_aText, str_length(pEntry->m_aText));
+			io_write_newline(io);
 		}
-		io_close(File);
-		str_format(aBuf, sizeof(aBuf), "%s contents were written to '%s'", pConsole->m_pName, aFilename);
+		io_close(io);
 	}
-	else
-	{
-		str_format(aBuf, sizeof(aBuf), "Failed to open '%s'", aFilename);
-	}
-	Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "console", aBuf);
 }
 
 void CGameConsole::ConToggleLocalConsole(IConsole::IResult *pResult, void *pUserData)
@@ -717,9 +658,9 @@ void CGameConsole::ConDumpRemoteConsole(IConsole::IResult *pResult, void *pUserD
 	((CGameConsole *)pUserData)->Dump(CONSOLETYPE_REMOTE);
 }
 
-void CGameConsole::ClientConsolePrintCallback(const char *pStr, void *pUserData, bool Highlighted)
+void CGameConsole::ClientConsolePrintCallback(const char *pStr, void *pUserData)
 {
-	((CGameConsole *)pUserData)->m_LocalConsole.PrintLine(pStr, Highlighted);
+	((CGameConsole *)pUserData)->m_LocalConsole.PrintLine(pStr);
 }
 
 void CGameConsole::ConchainConsoleOutputLevelUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
@@ -732,17 +673,12 @@ void CGameConsole::ConchainConsoleOutputLevelUpdate(IConsole::IResult *pResult, 
 	}
 }
 
-bool CGameConsole::IsConsoleActive()
-{
-	return m_ConsoleState != CONSOLE_CLOSED;
-}
-
 void CGameConsole::PrintLine(int Type, const char *pLine)
 {
 	if(Type == CONSOLETYPE_LOCAL)
-		m_LocalConsole.PrintLine(pLine, false);
+		m_LocalConsole.PrintLine(pLine);
 	else if(Type == CONSOLETYPE_REMOTE)
-		m_RemoteConsole.PrintLine(pLine, false);
+		m_RemoteConsole.PrintLine(pLine);
 }
 
 void CGameConsole::OnConsoleInit()
@@ -754,14 +690,14 @@ void CGameConsole::OnConsoleInit()
 	m_pConsole = Kernel()->RequestInterface<IConsole>();
 
 	//
-	m_PrintCBIndex = Console()->RegisterPrintCallback(Config()->m_ConsoleOutputLevel, ClientConsolePrintCallback, this);
+	m_PrintCBIndex = Console()->RegisterPrintCallback(g_Config.m_ConsoleOutputLevel, ClientConsolePrintCallback, this);
 
 	Console()->Register("toggle_local_console", "", CFGFLAG_CLIENT, ConToggleLocalConsole, this, "Toggle local console");
 	Console()->Register("toggle_remote_console", "", CFGFLAG_CLIENT, ConToggleRemoteConsole, this, "Toggle remote console");
 	Console()->Register("clear_local_console", "", CFGFLAG_CLIENT, ConClearLocalConsole, this, "Clear local console");
 	Console()->Register("clear_remote_console", "", CFGFLAG_CLIENT, ConClearRemoteConsole, this, "Clear remote console");
-	Console()->Register("dump_local_console", "", CFGFLAG_CLIENT, ConDumpLocalConsole, this, "Write local console contents to a text file");
-	Console()->Register("dump_remote_console", "", CFGFLAG_CLIENT, ConDumpRemoteConsole, this, "Write remote console contents to a text file");
+	Console()->Register("dump_local_console", "", CFGFLAG_CLIENT, ConDumpLocalConsole, this, "Dump local console");
+	Console()->Register("dump_remote_console", "", CFGFLAG_CLIENT, ConDumpRemoteConsole, this, "Dump remote console");
 
 	Console()->Chain("console_output_level", ConchainConsoleOutputLevelUpdate, this);
 }

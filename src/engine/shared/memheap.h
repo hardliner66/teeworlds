@@ -29,6 +29,6 @@ public:
 	CHeap();
 	~CHeap();
 	void Reset();
-	void *Allocate(unsigned int Size);
+	void *Allocate(unsigned Size);
 };
 #endif

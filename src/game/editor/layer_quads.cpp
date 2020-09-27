@@ -1,16 +1,14 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
-#include <base/color.h>
 #include <base/math.h>
 
 #include <engine/console.h>
 #include <engine/graphics.h>
 
 #include "editor.h"
-#include <generated/client_data.h>
-#include <game/client/localization.h>
+#include <game/generated/client_data.h>
 #include <game/client/render.h>
-
+#include <game/localization.h>
 
 CLayerQuads::CLayerQuads()
 {
@@ -25,12 +23,12 @@ CLayerQuads::~CLayerQuads()
 
 void CLayerQuads::Render()
 {
-	Graphics()->TextureClear();
+	Graphics()->TextureSet(-1);
 	if(m_Image >= 0 && m_Image < m_pEditor->m_Map.m_lImages.size())
-		Graphics()->TextureSet(m_pEditor->m_Map.m_lImages[m_Image]->m_Texture);
+		Graphics()->TextureSet(m_pEditor->m_Map.m_lImages[m_Image]->m_TexID);
 
-	//Graphics()->BlendNone();
-	//m_pEditor->RenderTools()->RenderQuads(m_lQuads.base_ptr(), m_lQuads.size(), LAYERRENDERFLAG_OPAQUE, m_pEditor->EnvelopeEval, m_pEditor);
+	Graphics()->BlendNone();
+	m_pEditor->RenderTools()->RenderQuads(m_lQuads.base_ptr(), m_lQuads.size(), LAYERRENDERFLAG_OPAQUE, m_pEditor->EnvelopeEval, m_pEditor);
 	Graphics()->BlendNormal();
 	m_pEditor->RenderTools()->RenderQuads(m_lQuads.base_ptr(), m_lQuads.size(), LAYERRENDERFLAG_TRANSPARENT, m_pEditor->EnvelopeEval, m_pEditor);
 }
@@ -46,29 +44,36 @@ CQuad *CLayerQuads::NewQuad()
 	q->m_PosEnvOffset = 0;
 	q->m_ColorEnvOffset = 0;
 	int x = 0, y = 0;
-	q->m_aPoints[0].x = i2fx(x);
-	q->m_aPoints[0].y = i2fx(y);
-	q->m_aPoints[1].x = i2fx(x+64);
-	q->m_aPoints[1].y = i2fx(y);
-	q->m_aPoints[2].x = i2fx(x);
-	q->m_aPoints[2].y = i2fx(y+64);
-	q->m_aPoints[3].x = i2fx(x+64);
-	q->m_aPoints[3].y = i2fx(y+64);
+	q->m_aPoints[0].x = x;
+	q->m_aPoints[0].y = y;
+	q->m_aPoints[1].x = x+64;
+	q->m_aPoints[1].y = y;
+	q->m_aPoints[2].x = x;
+	q->m_aPoints[2].y = y+64;
+	q->m_aPoints[3].x = x+64;
+	q->m_aPoints[3].y = y+64;
 
-	q->m_aPoints[4].x = i2fx(x+32); // pivot
-	q->m_aPoints[4].y = i2fx(y+32);
+	q->m_aPoints[4].x = x+32; // pivot
+	q->m_aPoints[4].y = y+32;
 
-	q->m_aTexcoords[0].x = i2fx(0);
-	q->m_aTexcoords[0].y = i2fx(0);
+	for(int i = 0; i < 5; i++)
+	{
+		q->m_aPoints[i].x <<= 10;
+		q->m_aPoints[i].y <<= 10;
+	}
 
-	q->m_aTexcoords[1].x = i2fx(1);
-	q->m_aTexcoords[1].y = i2fx(0);
 
-	q->m_aTexcoords[2].x = i2fx(0);
-	q->m_aTexcoords[2].y = i2fx(1);
+	q->m_aTexcoords[0].x = 0;
+	q->m_aTexcoords[0].y = 0;
 
-	q->m_aTexcoords[3].x = i2fx(1);
-	q->m_aTexcoords[3].y = i2fx(1);
+	q->m_aTexcoords[1].x = 1<<10;
+	q->m_aTexcoords[1].y = 0;
+
+	q->m_aTexcoords[2].x = 0;
+	q->m_aTexcoords[2].y = 1<<10;
+
+	q->m_aTexcoords[3].x = 1<<10;
+	q->m_aTexcoords[3].y = 1<<10;
 
 	q->m_aColors[0].r = 255; q->m_aColors[0].g = 255; q->m_aColors[0].b = 255; q->m_aColors[0].a = 255;
 	q->m_aColors[1].r = 255; q->m_aColors[1].g = 255; q->m_aColors[1].b = 255; q->m_aColors[1].a = 255;
@@ -81,15 +86,13 @@ CQuad *CLayerQuads::NewQuad()
 void CLayerQuads::BrushSelecting(CUIRect Rect)
 {
 	// draw selection rectangle
-	vec4 RectColor = HexToRgba(m_pEditor->Config()->m_EdColorSelectionQuad);
 	IGraphics::CLineItem Array[4] = {
 		IGraphics::CLineItem(Rect.x, Rect.y, Rect.x+Rect.w, Rect.y),
 		IGraphics::CLineItem(Rect.x+Rect.w, Rect.y, Rect.x+Rect.w, Rect.y+Rect.h),
 		IGraphics::CLineItem(Rect.x+Rect.w, Rect.y+Rect.h, Rect.x, Rect.y+Rect.h),
 		IGraphics::CLineItem(Rect.x, Rect.y+Rect.h, Rect.x, Rect.y)};
-	Graphics()->TextureClear();
+	Graphics()->TextureSet(-1);
 	Graphics()->LinesBegin();
-	Graphics()->SetColor(RectColor.r*RectColor.a, RectColor.g*RectColor.a, RectColor.b*RectColor.a, RectColor.a);
 	Graphics()->LinesDraw(Array, 4);
 	Graphics()->LinesEnd();
 }
@@ -182,7 +185,7 @@ void CLayerQuads::BrushRotate(float Amount)
 	}
 }
 
-void CLayerQuads::GetSize(float *w, float *h) const
+void CLayerQuads::GetSize(float *w, float *h)
 {
 	*w = 0; *h = 0;
 
@@ -195,6 +198,8 @@ void CLayerQuads::GetSize(float *w, float *h) const
 		}
 	}
 }
+
+extern int gs_SelectedPoints;
 
 int CLayerQuads::RenderProperties(CUIRect *pToolBox)
 {

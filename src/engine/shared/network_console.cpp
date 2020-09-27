@@ -8,7 +8,7 @@
 #include "network.h"
 
 
-bool CNetConsole::Open(NETADDR BindAddr, CNetBan *pNetBan, NETFUNC_NEWCLIENT pfnNewClient, NETFUNC_DELCLIENT pfnDelClient, void *pUser)
+bool CNetConsole::Open(NETADDR BindAddr, CNetBan *pNetBan, int Flags)
 {
 	// zero out the whole structure
 	mem_zero(this, sizeof(*this));
@@ -28,30 +28,34 @@ bool CNetConsole::Open(NETADDR BindAddr, CNetBan *pNetBan, NETFUNC_NEWCLIENT pfn
 	for(int i = 0; i < NET_MAX_CONSOLE_CLIENTS; i++)
 		m_aSlots[i].m_Connection.Reset();
 
-	m_pfnNewClient = pfnNewClient;
-	m_pfnDelClient = pfnDelClient;
-	m_UserPtr = pUser;
-
 	return true;
 }
 
-void CNetConsole::Close()
+void CNetConsole::SetCallbacks(NETFUNC_NEWCLIENT_CON pfnNewClient, NETFUNC_DELCLIENT pfnDelClient, void *pUser)
 {
-	for(int i = 0; i < NET_MAX_CONSOLE_CLIENTS; i++)
-		Drop(i, "Closing console");
-
-	net_tcp_close(m_Socket);
+	m_pfnNewClient = pfnNewClient;
+	m_pfnDelClient = pfnDelClient;
+	m_UserPtr = pUser;
 }
 
-void CNetConsole::Drop(int ClientID, const char *pReason)
+int CNetConsole::Close()
 {
-	if(ClientID < 0 || ClientID >= NET_MAX_CONSOLE_CLIENTS || m_aSlots[ClientID].m_Connection.State() == NET_CONNSTATE_OFFLINE)
-		return;
+	for(int i = 0; i < NET_MAX_CONSOLE_CLIENTS; i++)
+		m_aSlots[i].m_Connection.Disconnect("closing console");
 
+	net_tcp_close(m_Socket);
+
+	return 0;
+}
+
+int CNetConsole::Drop(int ClientID, const char *pReason)
+{
 	if(m_pfnDelClient)
 		m_pfnDelClient(ClientID, pReason, m_UserPtr);
 
 	m_aSlots[ClientID].m_Connection.Disconnect(pReason);
+
+	return 0;
 }
 
 int CNetConsole::AcceptClient(NETSOCKET Socket, const NETADDR *pAddr)
@@ -66,7 +70,7 @@ int CNetConsole::AcceptClient(NETSOCKET Socket, const NETADDR *pAddr)
 			FreeSlot = i;
 		if(m_aSlots[i].m_Connection.State() != NET_CONNSTATE_OFFLINE)
 		{
-			if(net_addr_comp(pAddr, m_aSlots[i].m_Connection.PeerAddress(), true) == 0)
+			if(net_addr_comp(pAddr, m_aSlots[i].m_Connection.PeerAddress()) == 0)
 			{
 				str_copy(aError, "only one client per IP allowed", sizeof(aError));
 				break;
@@ -102,15 +106,10 @@ int CNetConsole::Update()
 	{
 		// check if we just should drop the packet
 		char aBuf[128];
-		int LastInfoQuery;
-		if(NetBan() && NetBan()->IsBanned(&Addr, aBuf, sizeof(aBuf), &LastInfoQuery))
+		if(NetBan() && NetBan()->IsBanned(&Addr, aBuf, sizeof(aBuf)))
 		{
-			// banned, reply with a message (5 second cooldown) and drop
-			int Time = time_timestamp();
-			if(LastInfoQuery + 5 < Time)
-			{
-				net_tcp_send(Socket, aBuf, str_length(aBuf));
-			}
+			// banned, reply with a message and drop
+			net_tcp_send(Socket, aBuf, str_length(aBuf));
 			net_tcp_close(Socket);
 		}
 		else

@@ -3,8 +3,13 @@
 #include "dm.h"
 
 
-CGameControllerDM::CGameControllerDM(CGameContext *pGameServer)
+CGameControllerDM::CGameControllerDM(class CGameContext *pGameServer)
 : IGameController(pGameServer)
 {
 	m_pGameType = "DM";
+}
+
+void CGameControllerDM::Tick()
+{
+	IGameController::Tick();
 }

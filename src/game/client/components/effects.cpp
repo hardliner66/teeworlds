@@ -5,7 +5,7 @@
 
 #include <engine/shared/config.h>
 
-#include <generated/client_data.h>
+#include <game/generated/client_data.h>
 
 #include <game/client/components/particles.h>
 #include <game/client/components/skins.h>
@@ -22,8 +22,6 @@ CEffects::CEffects()
 {
 	m_Add50hz = false;
 	m_Add100hz = false;
-	m_DamageTaken = 0;
-	m_DamageTakenTick = 0;
 }
 
 void CEffects::AirJump(vec2 Pos)
@@ -49,36 +47,9 @@ void CEffects::AirJump(vec2 Pos)
 	m_pClient->m_pSounds->PlayAt(CSounds::CHN_WORLD, SOUND_PLAYER_AIRJUMP, 1.0f, Pos);
 }
 
-void CEffects::DamageIndicator(vec2 Pos, int Amount)
+void CEffects::DamageIndicator(vec2 Pos, vec2 Dir)
 {
-	// ignore if there is no damage
-	if(Amount == 0)
-		return;
-
-	m_DamageTaken++;
-	float Angle;
-	// create healthmod indicator
-	if(Client()->LocalTime() < m_DamageTakenTick+0.5f)
-	{
-		// make sure that the damage indicators don't group together
-		Angle = m_DamageTaken*0.25f;
-	}
-	else
-	{
-		m_DamageTaken = 0;
-		Angle = 0;
-	}
-
-	float a = 3*pi/2 + Angle;
-	float s = a-pi/3;
-	float e = a+pi/3;
-	for(int i = 0; i < Amount; i++)
-	{
-		float f = mix(s, e, float(i+1)/float(Amount+2));
-		m_pClient->m_pDamageind->Create(vec2(Pos.x, Pos.y), direction(f));
-	}
-
-	m_DamageTakenTick = Client()->LocalTime();
+	m_pClient->m_pDamageind->Create(Pos, Dir);
 }
 
 void CEffects::PowerupShine(vec2 Pos, vec2 size)
@@ -185,22 +156,13 @@ void CEffects::PlayerDeath(vec2 Pos, int ClientID)
 
 	if(ClientID >= 0)
 	{
-		if(m_pClient->m_GameInfo.m_GameFlags&GAMEFLAG_TEAMS)
-		{
-			int ColorVal = m_pClient->m_pSkins->GetTeamColor(m_pClient->m_aClients[ClientID].m_aUseCustomColors[SKINPART_BODY], m_pClient->m_aClients[ClientID].m_aSkinPartColors[SKINPART_BODY],
-																m_pClient->m_aClients[ClientID].m_Team, SKINPART_BODY);
-			BloodColor = m_pClient->m_pSkins->GetColorV3(ColorVal);
-		}
+		if(m_pClient->m_aClients[ClientID].m_UseCustomColor)
+			BloodColor = m_pClient->m_pSkins->GetColorV3(m_pClient->m_aClients[ClientID].m_ColorBody);
 		else
 		{
-			if(m_pClient->m_aClients[ClientID].m_aUseCustomColors[SKINPART_BODY])
-				BloodColor = m_pClient->m_pSkins->GetColorV3(m_pClient->m_aClients[ClientID].m_aSkinPartColors[SKINPART_BODY]);
-			else
-			{
-				const CSkins::CSkinPart *s = m_pClient->m_pSkins->GetSkinPart(SKINPART_BODY, m_pClient->m_aClients[ClientID].m_SkinPartIDs[SKINPART_BODY]);
-				if(s)
-					BloodColor = s->m_BloodColor;
-			}
+			const CSkins::CSkin *s = m_pClient->m_pSkins->Get(m_pClient->m_aClients[ClientID].m_SkinID);
+			if(s)
+				BloodColor = s->m_BloodColor;
 		}
 	}
 
@@ -208,7 +170,7 @@ void CEffects::PlayerDeath(vec2 Pos, int ClientID)
 	{
 		CParticle p;
 		p.SetDefault();
-		p.m_Spr = SPRITE_PART_SPLAT01 + (random_int()%3);
+		p.m_Spr = SPRITE_PART_SPLAT01 + (rand()%3);
 		p.m_Pos = Pos;
 		p.m_Vel = RandomDir() * ((frandom()+0.1f)*900.0f);
 		p.m_LifeSpan = 0.3f + frandom()*0.3f;
@@ -285,36 +247,51 @@ void CEffects::HammerHit(vec2 Pos)
 
 void CEffects::OnRender()
 {
-	static int64 s_LastUpdate100hz = 0;
-	static int64 s_LastUpdate50hz = 0;
+	static int64 LastUpdate100hz = 0;
+	static int64 LastUpdate50hz = 0;
 
-	const float Speed = GetEffectsSpeed();
-	const int64 Now = time_get();
-	const int64 Freq = time_freq();
+	if(Client()->State() == IClient::STATE_DEMOPLAYBACK)
+	{
+		const IDemoPlayer::CInfo *pInfo = DemoPlayer()->BaseInfo();
 
-	if(Now-s_LastUpdate100hz > Freq/(100*Speed))
+		if(time_get()-LastUpdate100hz > time_freq()/(100*pInfo->m_Speed))
+		{
+			m_Add100hz = true;
+			LastUpdate100hz = time_get();
+		}
+		else
+			m_Add100hz = false;
+
+		if(time_get()-LastUpdate50hz > time_freq()/(100*pInfo->m_Speed))
+		{
+			m_Add50hz = true;
+			LastUpdate50hz = time_get();
+		}
+		else
+			m_Add50hz = false;
+
+		if(m_Add50hz)
+			m_pClient->m_pFlow->Update();
+
+		return;
+	}
+
+	if(time_get()-LastUpdate100hz > time_freq()/100)
 	{
 		m_Add100hz = true;
-		s_LastUpdate100hz = Now;
+		LastUpdate100hz = time_get();
 	}
 	else
 		m_Add100hz = false;
 
-	if(Now-s_LastUpdate50hz > Freq/(50*Speed))
+	if(time_get()-LastUpdate50hz > time_freq()/100)
 	{
 		m_Add50hz = true;
-		s_LastUpdate50hz = Now;
+		LastUpdate50hz = time_get();
 	}
 	else
 		m_Add50hz = false;
 
 	if(m_Add50hz)
 		m_pClient->m_pFlow->Update();
-}
-
-float CEffects::GetEffectsSpeed()
-{
-	if(Client()->State() == IClient::STATE_DEMOPLAYBACK)
-		return DemoPlayer()->BaseInfo()->m_Speed;
-	return 1.0f;
 }

@@ -7,31 +7,37 @@
 // allocates a new chunk to be used
 void CHeap::NewChunk()
 {
+	CChunk *pChunk;
+	char *pMem;
+
 	// allocate memory
-	char *pMem = (char*)mem_alloc(sizeof(CChunk)+CHUNK_SIZE, 1);
+	pMem = (char*)mem_alloc(sizeof(CChunk)+CHUNK_SIZE, 1);
 	if(!pMem)
 		return;
 
 	// the chunk structure is located in the begining of the chunk
 	// init it and return the chunk
-	CChunk *pChunk = (CChunk*)pMem;
+	pChunk = (CChunk*)pMem;
 	pChunk->m_pMemory = (char*)(pChunk+1);
 	pChunk->m_pCurrent = pChunk->m_pMemory;
 	pChunk->m_pEnd = pChunk->m_pMemory + CHUNK_SIZE;
-	pChunk->m_pNext = m_pCurrent;
+	pChunk->m_pNext = (CChunk *)0x0;
 
+	pChunk->m_pNext = m_pCurrent;
 	m_pCurrent = pChunk;
 }
 
 //****************
 void *CHeap::AllocateFromChunk(unsigned int Size)
 {
+	char *pMem;
+
 	// check if we need can fit the allocation
 	if(m_pCurrent->m_pCurrent + Size > m_pCurrent->m_pEnd)
 		return (void*)0x0;
 
 	// get memory and move the pointer forward
-	char *pMem = m_pCurrent->m_pCurrent;
+	pMem = m_pCurrent->m_pCurrent;
 	m_pCurrent->m_pCurrent += Size;
 	return pMem;
 }
@@ -40,7 +46,7 @@ void *CHeap::AllocateFromChunk(unsigned int Size)
 CHeap::CHeap()
 {
 	m_pCurrent = 0x0;
-	NewChunk();
+	Reset();
 }
 
 CHeap::~CHeap()
@@ -58,10 +64,11 @@ void CHeap::Reset()
 void CHeap::Clear()
 {
 	CChunk *pChunk = m_pCurrent;
+	CChunk *pNext;
 
 	while(pChunk)
 	{
-		CChunk *pNext = pChunk->m_pNext;
+		pNext = pChunk->m_pNext;
 		mem_free(pChunk);
 		pChunk = pNext;
 	}
@@ -70,10 +77,12 @@ void CHeap::Clear()
 }
 
 //
-void *CHeap::Allocate(unsigned int Size)
+void *CHeap::Allocate(unsigned Size)
 {
+	char *pMem;
+
 	// try to allocate from current chunk
-	char *pMem = (char *)AllocateFromChunk(Size);
+	pMem = (char *)AllocateFromChunk(Size);
 	if(!pMem)
 	{
 		// allocate new chunk and add it to the heap

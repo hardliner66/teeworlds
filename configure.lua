@@ -1,4 +1,17 @@
 
+function loadfile_(filename, env)
+	local file
+	if _VERSION == "Lua 5.1" then
+		file = loadfile(filename)
+		if file then
+			setfenv(file, env)
+		end
+	else
+		file = loadfile(filename, nil, env)
+	end
+	return file
+end
+
 --[[@GROUP Configuration@END]]--
 
 --[[@FUNCTION
@@ -73,12 +86,12 @@ function NewConfig(on_configured_callback)
 
 	config.Load = function(self, filename)
 		local options_table = {}
-		local options_func = loadfile(filename, nil, options_table)
+		local options_func = loadfile_(filename, options_table)
 
 		if not options_func then
 			print("auto configuration")
 			self:Config(filename)
-			options_func = loadfile(filename, nil, options_table)
+			options_func = loadfile_(filename, options_table)
 		end
 
 		if options_func then
@@ -359,10 +372,10 @@ function OptCCompiler(name, default_driver, default_c, default_cxx, desc)
 			-- no need todo anything if we have a driver
 			-- TODO: test if we can find the compiler
 		else
-			if ExecuteSilent("g++ -v") == 0 and ((arch ~= "amd64" and arch ~= "ia64") or CTestCompile(settings, "int main(){return 0;}", "-m64")) then
-				option.driver = "gcc"
-			elseif ExecuteSilent("cl") == 0 then
+			if ExecuteSilent("cl") == 0 then
 				option.driver = "cl"
+			elseif ExecuteSilent("g++ -v") == 0 then
+				option.driver = "gcc"
 			else
 				error("no c/c++ compiler found")
 			end

@@ -5,7 +5,6 @@
 #include "kernel.h"
 
 #include "message.h"
-#include "graphics.h"
 
 class IClient : public IInterface
 {
@@ -20,9 +19,6 @@ protected:
 	float m_GameIntraTick;
 	float m_GameTickTime;
 
-	int m_CurMenuTick;
-	int64 m_MenuStartTime;
-
 	int m_PredTick;
 	float m_PredIntraTick;
 
@@ -31,6 +27,22 @@ protected:
 
 	int m_GameTickSpeed;
 public:
+
+	IClient()
+	{
+		m_PrevGameTick = 0;
+		m_CurGameTick = 0;
+		m_GameIntraTick = 0;
+		m_GameTickTime = 0;
+
+		m_PredTick = 0;
+		m_PredIntraTick = 0;
+
+		m_LocalTime = 0;
+		m_RenderFrameTime = 0;
+
+		m_GameTickSpeed = 0;
+	}
 
 	class CSnapItem
 	{
@@ -46,7 +58,7 @@ public:
 		STATE_LOADING - The client has connected to a server and is loading resources.
 		STATE_ONLINE - The client is connected to a server and running the game.
 		STATE_DEMOPLAYBACK - The client is playing a demo
-		STATE_QUITING - The client is quitting.
+		STATE_QUITING - The client is quiting.
 	*/
 
 	enum
@@ -65,7 +77,6 @@ public:
 	// tick time access
 	inline int PrevGameTick() const { return m_PrevGameTick; }
 	inline int GameTick() const { return m_CurGameTick; }
-	inline int MenuTick() const { return m_CurMenuTick; }
 	inline int PredGameTick() const { return m_PredTick; }
 	inline float IntraGameTick() const { return m_GameIntraTick; }
 	inline float PredIntraGameTick() const { return m_PredIntraTick; }
@@ -84,37 +95,23 @@ public:
 	virtual void DemoRecorder_Start(const char *pFilename, bool WithTimestamp) = 0;
 	virtual void DemoRecorder_HandleAutoStart() = 0;
 	virtual void DemoRecorder_Stop() = 0;
-	virtual void RecordGameMessage(bool State) = 0;
-	virtual void AutoStatScreenshot_Start() = 0;
 	virtual void AutoScreenshot_Start() = 0;
 	virtual void ServerBrowserUpdate() = 0;
-
-	// gfx
-	virtual void SwitchWindowScreen(int Index) = 0;
-	virtual bool ToggleFullscreen() = 0;
-	virtual void ToggleWindowBordered() = 0;
-	virtual void ToggleWindowVSync() = 0;
 
 	// networking
 	virtual void EnterGame() = 0;
 
-	// network stats
-	virtual int GetInputtimeMarginStabilityScore() = 0;
-
 	//
-	virtual const char *GetCurrentMapName() const = 0;
-	virtual const char *GetCurrentMapPath() const = 0;
-	virtual const char *MapDownloadName() const = 0;
-	virtual int MapDownloadAmount() const = 0;
-	virtual int MapDownloadTotalsize() const = 0;
+	virtual int MapDownloadAmount() = 0;
+	virtual int MapDownloadTotalsize() = 0;
 
 	// input
-	virtual const int *GetInput(int Tick) const = 0;
+	virtual int *GetInput(int Tick) = 0;
 
 	// remote console
 	virtual void RconAuth(const char *pUsername, const char *pPassword) = 0;
-	virtual bool RconAuthed() const = 0;
-	virtual bool UseTempRconCommands() const = 0;
+	virtual bool RconAuthed() = 0;
+	virtual bool UseTempRconCommands() = 0;
 	virtual void Rcon(const char *pLine) = 0;
 
 	// server info
@@ -129,33 +126,44 @@ public:
 	};
 
 	// TODO: Refactor: should redo this a bit i think, too many virtual calls
-	virtual int SnapNumItems(int SnapID) const = 0;
-	virtual const void *SnapFindItem(int SnapID, int Type, int ID) const = 0;
-	virtual const void *SnapGetItem(int SnapID, int Index, CSnapItem *pItem) const = 0;
+	virtual int SnapNumItems(int SnapID) = 0;
+	virtual void *SnapFindItem(int SnapID, int Type, int ID) = 0;
+	virtual void *SnapGetItem(int SnapID, int Index, CSnapItem *pItem) = 0;
 	virtual void SnapInvalidateItem(int SnapID, int Index) = 0;
-
-	virtual void *SnapNewItem(int Type, int ID, int Size) = 0;
 
 	virtual void SnapSetStaticsize(int ItemType, int Size) = 0;
 
 	virtual int SendMsg(CMsgPacker *pMsg, int Flags) = 0;
+	
+	virtual void SendHttp(class CRequestInfo *pInfo, class IRequest *pRequest) = 0;
 
 	template<class T>
 	int SendPackMsg(T *pMsg, int Flags)
 	{
-		CMsgPacker Packer(pMsg->MsgID(), false);
+		CMsgPacker Packer(pMsg->MsgID());
 		if(pMsg->Pack(&Packer))
 			return -1;
 		return SendMsg(&Packer, Flags);
 	}
 
 	//
-	virtual const char *ServerAddress() const = 0;
-	virtual const char *ErrorString() const = 0;
-	virtual const char *LatestVersion() const = 0;
-	virtual bool ConnectionProblems() const = 0;
+	virtual const char *ErrorString() = 0;
+	virtual const char *LatestVersion() = 0;
+	virtual bool ConnectionProblems() = 0;
 
-	virtual bool SoundInitFailed() const = 0;
+	virtual bool SoundInitFailed() = 0;
+
+	virtual int GetDebugFont() = 0;
+	
+	// Race
+	virtual const char *GetCurrentMap() const = 0;
+	virtual unsigned GetMapCrc() const = 0;
+
+	virtual void DemoRecorder_StartRace(const char *pFilename) = 0;
+	
+	virtual void GhostRecorder_Start(const char *pFilename, const char *pPlayerName) = 0;
+	virtual bool GhostLoader_Load(const char *pFilename) = 0;
+	virtual bool GhostLoader_GetGhostInfo(const char *pFilename, struct CGhostHeader *pGhostHeader) = 0;
 };
 
 class IGameClient : public IInterface
@@ -168,11 +176,9 @@ public:
 	virtual void OnRconLine(const char *pLine) = 0;
 	virtual void OnInit() = 0;
 	virtual void OnNewSnapshot() = 0;
-	virtual void OnDemoRecSnap() = 0;
 	virtual void OnEnterGame() = 0;
 	virtual void OnShutdown() = 0;
 	virtual void OnRender() = 0;
-	virtual void OnUpdate() = 0;
 	virtual void OnStateChange(int NewState, int OldState) = 0;
 	virtual void OnConnected() = 0;
 	virtual void OnMessage(int MsgID, CUnpacker *pUnpacker) = 0;
@@ -181,12 +187,9 @@ public:
 
 	virtual int OnSnapInput(int *pData) = 0;
 
-	virtual const char *GetItemName(int Type) const = 0;
-	virtual const char *Version() const = 0;
-	virtual const char *NetVersion() const = 0;
-	virtual const char *NetVersionHashUsed() const = 0;
-	virtual const char *NetVersionHashReal() const = 0;
-	virtual int ClientVersion() const = 0;
+	virtual const char *GetItemName(int Type) = 0;
+	virtual const char *Version() = 0;
+	virtual const char *NetVersion() = 0;
 
 };
 

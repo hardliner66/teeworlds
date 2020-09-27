@@ -5,6 +5,19 @@
 #include "kernel.h"
 #include "message.h"
 
+struct CCustomClient
+{
+	enum
+	{
+		CLIENT_VANILLA = 0,
+		CLIENT_RACE,
+		CLIENT_DDNET
+	};
+
+	int m_Type;
+	int m_Version;
+};
+
 class IServer : public IInterface
 {
 	MACRO_INTERFACE("server", 0)
@@ -20,25 +33,30 @@ public:
 	{
 		const char *m_pName;
 		int m_Latency;
+		CCustomClient *m_pCustom;
 	};
 
 	int Tick() const { return m_CurrentGameTick; }
 	int TickSpeed() const { return m_TickSpeed; }
 
-	virtual const char *ClientName(int ClientID) const = 0;
-	virtual const char *ClientClan(int ClientID) const = 0;
-	virtual int ClientCountry(int ClientID) const = 0;
-	virtual bool ClientIngame(int ClientID) const = 0;
-	virtual int GetClientInfo(int ClientID, CClientInfo *pInfo) const = 0;
-	virtual void GetClientAddr(int ClientID, char *pAddrStr, int Size) const = 0;
-	virtual int GetClientVersion(int ClientID) const = 0;
+	virtual int MaxClients() const = 0;
+	virtual const char *ClientName(int ClientID) = 0;
+	virtual const char *ClientClan(int ClientID) = 0;
+	virtual int ClientCountry(int ClientID) = 0;
+	virtual bool ClientIngame(int ClientID) = 0;
+	virtual int GetClientInfo(int ClientID, CClientInfo *pInfo) = 0;
+	virtual void GetClientAddr(int ClientID, char *pAddrStr, int Size) = 0;
 
 	virtual int SendMsg(CMsgPacker *pMsg, int Flags, int ClientID) = 0;
+
+#if defined(CONF_TEERACE)
+	virtual void SendHttp(class CRequestInfo *pInfo, class IRequest *pRequest) = 0;
+#endif
 
 	template<class T>
 	int SendPackMsg(T *pMsg, int Flags, int ClientID)
 	{
-		CMsgPacker Packer(pMsg->MsgID(), false);
+		CMsgPacker Packer(pMsg->MsgID());
 		if(pMsg->Pack(&Packer))
 			return -1;
 		return SendMsg(&Packer, Flags, ClientID);
@@ -61,13 +79,42 @@ public:
 		RCON_CID_VOTE=-2,
 	};
 	virtual void SetRconCID(int ClientID) = 0;
-	virtual bool IsAuthed(int ClientID) const = 0;
-	virtual bool IsBanned(int ClientID) = 0;
+	virtual bool IsAuthed(int ClientID) = 0;
 	virtual void Kick(int ClientID, const char *pReason) = 0;
-	virtual void ChangeMap(const char *pMap) = 0;
 
 	virtual void DemoRecorder_HandleAutoStart() = 0;
 	virtual bool DemoRecorder_IsRecording() = 0;
+
+	virtual char *GetMapName() = 0;
+
+#if defined(CONF_TEERACE)
+	virtual const char* GetConfigFilename() = 0;
+	virtual void ReloadMap() = 0;
+
+	virtual void SetUserID(int ClientID, int UserID) = 0;
+	virtual int GetUserID(int ClientID) = 0;
+	virtual int GetPlayTicks(int ClientID) = 0;
+	virtual void HigherPlayTicks(int ClientID) = 0;
+
+	virtual void SetUserName(int ClientID, const char* pUsername) = 0;
+	virtual const char* GetUserName(int ClientID) = 0;
+
+	virtual void StaffAuth(int ClientID, int SendRconCmds) = 0;
+
+	virtual void SaveGhostAndDemo(int ClientID) = 0;
+
+	virtual void Race_GetPath(char *pBuf, int Size, int ClientID, bool Tmp, int Tick) = 0;
+	virtual void RaceRecorder_Start(int ClientID) = 0;
+	virtual void RaceRecorder_Stop(int ClientID) = 0;
+	virtual bool RaceRecorder_IsRecording(int ClientID) = 0;
+
+	virtual void Ghost_GetPath(char *pBuf, int Size, int ClientID, bool Tmp, int Tick) = 0;
+	virtual void GhostRecorder_Start(int ClientID) = 0;
+	virtual void GhostRecorder_AddTick(int ClientID) = 0;
+	virtual void GhostRecorder_Stop(int ClientID, int Time) = 0;
+	virtual bool GhostRecorder_IsRecording(int ClientID) = 0;
+	virtual void GhostRecorder_WriteData(int ClientID, int Type, const char *pData, int Size) = 0;
+#endif
 };
 
 class IGameServer : public IInterface
@@ -86,24 +133,22 @@ public:
 
 	virtual void OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID) = 0;
 
-	virtual void OnClientConnected(int ClientID, bool AsSpec) = 0;
+	virtual void OnClientConnected(int ClientID) = 0;
 	virtual void OnClientEnter(int ClientID) = 0;
 	virtual void OnClientDrop(int ClientID, const char *pReason) = 0;
 	virtual void OnClientDirectInput(int ClientID, void *pInput) = 0;
 	virtual void OnClientPredictedInput(int ClientID, void *pInput) = 0;
 
-	virtual bool IsClientBot(int ClientID) const = 0;
-	virtual bool IsClientReady(int ClientID) const = 0;
-	virtual bool IsClientPlayer(int ClientID) const = 0;
-	virtual bool IsClientSpectator(int ClientID) const = 0;
+	virtual bool IsClientReady(int ClientID) = 0;
+	virtual bool IsClientPlayer(int ClientID) = 0;
 
-	virtual const char *GameType() const = 0;
-	virtual const char *Version() const = 0;
-	virtual const char *NetVersion() const = 0;
-	virtual const char *NetVersionHashUsed() const = 0;
-	virtual const char *NetVersionHashReal() const = 0;
+#if defined(CONF_TEERACE)
+	virtual void OnTeeraceAuth(int ClientID, const char *pStr, int SendRconCmds) = 0;
+#endif
 
-	virtual bool TimeScore() const { return false; }
+	virtual const char *GameType() = 0;
+	virtual const char *Version() = 0;
+	virtual const char *NetVersion() = 0;
 };
 
 extern IGameServer *CreateGameServer();

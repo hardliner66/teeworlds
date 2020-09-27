@@ -4,7 +4,7 @@
 #define ENGINE_SERVER_SERVER_H
 
 #include <engine/server.h>
-#include <engine/shared/memheap.h>
+
 
 class CSnapIDPool
 {
@@ -17,7 +17,7 @@ class CSnapIDPool
 	{
 	public:
 		short m_Next;
-		short m_State; // 0 = free, 1 = allocated, 2 = timed
+		short m_State; // 0 = free, 1 = alloced, 2 = timed
 		int m_Timeout;
 	};
 
@@ -62,12 +62,10 @@ public:
 class CServer : public IServer
 {
 	class IGameServer *m_pGameServer;
-	class CConfig *m_pConfig;
 	class IConsole *m_pConsole;
 	class IStorage *m_pStorage;
 public:
 	class IGameServer *GameServer() { return m_pGameServer; }
-	class CConfig *Config() { return m_pConfig; }
 	class IConsole *Console() { return m_pConsole; }
 	class IStorage *Storage() { return m_pStorage; }
 
@@ -78,12 +76,7 @@ public:
 		AUTHED_ADMIN,
 
 		MAX_RCONCMD_SEND=16,
-		MAX_MAPLISTENTRY_SEND = 32,
-		MIN_MAPLIST_CLIENTVERSION=0x0703,	// todo 0.8: remove me
-		MAX_RCONCMD_RATIO=8,
 	};
-
-	struct CMapListEntry;
 
 	class CClient
 	{
@@ -94,7 +87,6 @@ public:
 			STATE_EMPTY = 0,
 			STATE_AUTH,
 			STATE_CONNECTING,
-			STATE_CONNECTING_AS_SPEC,
 			STATE_READY,
 			STATE_INGAME,
 
@@ -125,18 +117,24 @@ public:
 
 		char m_aName[MAX_NAME_LENGTH];
 		char m_aClan[MAX_CLAN_LENGTH];
-		int m_Version;
 		int m_Country;
 		int m_Score;
 		int m_Authed;
 		int m_AuthTries;
 
-		int m_MapChunk;
-		bool m_NoRconNote;
-		bool m_Quitting;
 		const IConsole::CCommandInfo *m_pRconCmdToSend;
-		const CMapListEntry *m_pMapListEntryToSend;
 
+		CCustomClient m_Custom;
+
+#if defined(CONF_TEERACE)
+		int m_UserID;
+		char m_aUsername[64];
+
+		int m_PlayTicks;
+
+		int m_SaveDemoTick;
+		int m_SaveGhostTick;
+#endif
 		void Reset();
 	};
 
@@ -149,54 +147,46 @@ public:
 	CEcon m_Econ;
 	CServerBan m_ServerBan;
 
+#if defined(CONF_TEERACE)
+	CHttpClient m_HttpClient;
+#endif
+
 	IEngineMap *m_pMap;
 
 	int64 m_GameStartTime;
-	bool m_RunServer;
-	bool m_MapReload;
+	//int m_CurrentGameTick;
+	int m_RunServer;
+	int m_MapReload;
 	int m_RconClientID;
 	int m_RconAuthLevel;
 	int m_PrintCBIndex;
 
-	// map
-	enum
-	{
-		MAP_CHUNK_SIZE=NET_MAX_PAYLOAD-NET_MAX_CHUNKHEADERSIZE-4, // msg type
-	};
+	int64 m_Lastheartbeat;
+	//static NETADDR4 master_server;
+
 	char m_aCurrentMap[64];
-	SHA256_DIGEST m_CurrentMapSha256;
 	unsigned m_CurrentMapCrc;
 	unsigned char *m_pCurrentMapData;
 	int m_CurrentMapSize;
-	int m_MapChunksPerRequest;
 
-	//maplist
-	struct CMapListEntry
-	{
-		CMapListEntry *m_pPrev;
-		CMapListEntry *m_pNext;
-		char m_aName[IConsole::TEMPMAP_NAME_LENGTH];
-	};
+	bool m_ServerInfoHighLoad;
+	int64 m_ServerInfoFirstRequest;
+	int m_ServerInfoNumRequests;
 
-	struct CSubdirCallbackUserdata
-	{
-		CServer *m_pServer;
-		char m_aName[IConsole::TEMPMAP_NAME_LENGTH];
-	};
+#if defined(CONF_TEERACE)
+	char m_aConfigFilename[128];
 
-	CHeap *m_pMapListHeap;
-	CMapListEntry *m_pLastMapEntry;
-	CMapListEntry *m_pFirstMapEntry;
-	int m_NumMapEntries;
-
-	int m_RconPasswordSet;
-	int m_GeneratedRconPassword;
-
+	CDemoRecorder m_aDemoRecorder[MAX_CLIENTS];
+	CGhostRecorder m_aGhostRecorder[MAX_CLIENTS];
+	int m_aNumGhostTicks[MAX_CLIENTS];
+#endif
 	CDemoRecorder m_DemoRecorder;
 	CRegister m_Register;
 	CMapChecker m_MapChecker;
 
 	CServer();
+
+	int TrySetClientName(int ClientID, const char *pName);
 
 	virtual void SetClientName(int ClientID, const char *pName);
 	virtual void SetClientClan(int ClientID, char const *pClan);
@@ -208,58 +198,87 @@ public:
 	void DemoRecorder_HandleAutoStart();
 	bool DemoRecorder_IsRecording();
 
+	//int Tick()
 	int64 TickStartTime(int Tick);
+	//int TickSpeed()
 
 	int Init();
 
-	void InitRconPasswordIfUnset();
-
 	void SetRconCID(int ClientID);
-	bool IsAuthed(int ClientID) const;
-	bool IsBanned(int ClientID);
-	int GetClientInfo(int ClientID, CClientInfo *pInfo) const;
-	void GetClientAddr(int ClientID, char *pAddrStr, int Size) const;
-	int GetClientVersion(int ClientID) const;
-	const char *ClientName(int ClientID) const;
-	const char *ClientClan(int ClientID) const;
-	int ClientCountry(int ClientID) const;
-	bool ClientIngame(int ClientID) const;
+	bool IsAuthed(int ClientID);
+	int GetClientInfo(int ClientID, CClientInfo *pInfo);
+	void GetClientAddr(int ClientID, char *pAddrStr, int Size);
+	const char *ClientName(int ClientID);
+	const char *ClientClan(int ClientID);
+	int ClientCountry(int ClientID);
+	bool ClientIngame(int ClientID);
+	int MaxClients() const;
 
 	virtual int SendMsg(CMsgPacker *pMsg, int Flags, int ClientID);
+	int SendMsgEx(CMsgPacker *pMsg, int Flags, int ClientID, bool System);
 
 	void DoSnapshot();
 
-	static int NewClientCallback(int ClientID, void *pUser);
+	static int NewClientCallback(int ClientID, bool Legacy, void *pUser);
 	static int DelClientCallback(int ClientID, const char *pReason, void *pUser);
+
+#if defined(CONF_TEERACE)
+	virtual void SendHttp(class CRequestInfo *pInfo, class IRequest *pRequest);
+#endif
 
 	void SendMap(int ClientID);
 	void SendConnectionReady(int ClientID);
 	void SendRconLine(int ClientID, const char *pLine);
-	static void SendRconLineAuthed(const char *pLine, void *pUser, bool Highlighted);
+	static void SendRconLineAuthed(const char *pLine, void *pUser);
 
 	void SendRconCmdAdd(const IConsole::CCommandInfo *pCommandInfo, int ClientID);
 	void SendRconCmdRem(const IConsole::CCommandInfo *pCommandInfo, int ClientID);
 	void UpdateClientRconCommands();
-	void SendMapListEntryAdd(const CMapListEntry *pMapListEntry, int ClientID);
-	void SendMapListEntryRem(const CMapListEntry *pMapListEntry, int ClientID);
-	void UpdateClientMapListEntries();
 
 	void ProcessClientPacket(CNetChunk *pPacket);
 
-	void SendServerInfo(int ClientID);
-	void GenerateServerInfo(CPacker *pPacker, int Token);
+	void SendServerInfoConnless(const NETADDR *pAddr, int Token);
+	void SendServerInfo(const NETADDR *pAddr, int Token, bool SendClients = true);
+	void UpdateServerInfo();
 
 	void PumpNetwork();
 
-	virtual void ChangeMap(const char *pMap);
-	const char *GetMapName();
+#if defined(CONF_TEERACE)
+	void SaveConfigFilename(int NumArgs, const char **ppArguments);
+	const char* GetConfigFilename() { return m_aConfigFilename; }
+	
+	void ReloadMap();
+
+	void SetUserID(int ClientID, int UserID) { m_aClients[ClientID].m_UserID = UserID; }
+	int GetUserID(int ClientID) { return m_aClients[ClientID].m_UserID; }
+	int GetPlayTicks(int ClientID) { return m_aClients[ClientID].m_PlayTicks; }
+	void HigherPlayTicks(int ClientID) { m_aClients[ClientID].m_PlayTicks++; }
+
+	void SetUserName(int ClientID, const char* pUsername) { str_copy(m_aClients[ClientID].m_aUsername, pUsername, sizeof(m_aClients[ClientID].m_aUsername)); }
+	const char* GetUserName(int ClientID) { return m_aClients[ClientID].m_aUsername; }
+
+	void StaffAuth(int ClientID, int SendRconCmds);
+
+	void SaveGhostAndDemo(int ClientID);
+
+	void Race_GetPath(char *pBuf, int Size, int ClientID, bool Tmp, int Tick = 0);
+	void RaceRecorder_Start(int ClientID);
+	void RaceRecorder_Stop(int ClientID);
+	bool RaceRecorder_IsRecording(int ClientID);
+
+	void Ghost_GetPath(char *pBuf, int Size, int ClientID, bool Tmp, int Tick = 0);
+	void GhostRecorder_Start(int ClientID);
+	void GhostRecorder_AddTick(int ClientID);
+	void GhostRecorder_Stop(int ClientID, int Time);
+	bool GhostRecorder_IsRecording(int ClientID);
+	void GhostRecorder_WriteData(int ClientID, int Type, const char *pData, int Size);
+#endif
+
+	char *GetMapName();
 	int LoadMap(const char *pMapName);
 
-	void InitRegister(CNetServer *pNetServer, IEngineMasterServer *pMasterServer, CConfig *pConfig, IConsole *pConsole);
-	void InitInterfaces(CConfig *pConfig, IConsole *pConsole, IGameServer *pGameServer, IEngineMap *pMap, IStorage *pStorage);
+	void InitRegister(CNetServer *pNetServer, IEngineMasterServer *pMasterServer, IConsole *pConsole);
 	int Run();
-
-	static int MapListEntryCallback(const char *pFilename, int IsDir, int DirType, void *pUser);
 
 	static void ConKick(IConsole::IResult *pResult, void *pUser);
 	static void ConStatus(IConsole::IResult *pResult, void *pUser);
@@ -267,16 +286,11 @@ public:
 	static void ConRecord(IConsole::IResult *pResult, void *pUser);
 	static void ConStopRecord(IConsole::IResult *pResult, void *pUser);
 	static void ConMapReload(IConsole::IResult *pResult, void *pUser);
-	static void ConSaveConfig(IConsole::IResult *pResult, void *pUser);
 	static void ConLogout(IConsole::IResult *pResult, void *pUser);
 	static void ConchainSpecialInfoupdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
-	static void ConchainPlayerSlotsUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
-	static void ConchainMaxclientsUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	static void ConchainMaxclientsperipUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	static void ConchainModCommandUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 	static void ConchainConsoleOutputLevelUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
-	static void ConchainRconPasswordSet(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
-	static void ConchainMapUpdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData);
 
 	void RegisterCommands();
 

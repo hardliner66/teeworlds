@@ -19,10 +19,14 @@ struct CDemoHeader
 	unsigned char m_aMapSize[4];
 	unsigned char m_aMapCrc[4];
 	char m_aType[8];
-	unsigned char m_aLength[4];
+	char m_aLength[4];
 	char m_aTimestamp[20];
-	unsigned char m_aNumTimelineMarkers[4];
-	unsigned char m_aTimelineMarkers[MAX_TIMELINE_MARKERS][4];
+};
+
+struct CTimelineMarkers
+{
+	char m_aNumTimelineMarkers[4];
+	char m_aTimelineMarkers[MAX_TIMELINE_MARKERS][4];
 };
 
 class IDemoPlayer : public IInterface

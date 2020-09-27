@@ -18,7 +18,7 @@ class CFileCollection
 	int m_FileDescLength;
 	char m_aFileExt[32];
 	int m_FileExtLength;
-	char m_aPath[IO_MAX_PATH_LENGTH];
+	char m_aPath[512];
 	IStorage *m_pStorage;
 
 	bool IsFilenameValid(const char *pFilename);

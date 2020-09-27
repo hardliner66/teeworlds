@@ -10,12 +10,18 @@ CLayers::CLayers()
 	m_LayersStart = 0;
 	m_pGameGroup = 0;
 	m_pGameLayer = 0;
+	m_pTeleLayer = 0;
+	m_pSpeedupLayer = 0;
 	m_pMap = 0;
 }
 
-void CLayers::Init(class IKernel *pKernel, IMap *pMap)
+void CLayers::Init(class IKernel *pKernel)
 {
-	m_pMap = pMap ? pMap : pKernel->RequestInterface<IMap>();
+	// reset pointers to race specific layers
+	m_pTeleLayer = 0;
+	m_pSpeedupLayer = 0;
+
+	m_pMap = pKernel->RequestInterface<IMap>();
 	m_pMap->GetType(MAPITEMTYPE_GROUP, &m_GroupsStart, &m_GroupsNum);
 	m_pMap->GetType(MAPITEMTYPE_LAYER, &m_LayersStart, &m_LayersNum);
 
@@ -49,43 +55,19 @@ void CLayers::Init(class IKernel *pKernel, IMap *pMap)
 						m_pGameGroup->m_ClipH = 0;
 					}
 
-					break;
+					//break;
 				}
-			}
-		}
-	}
-
-	InitTilemapSkip();
-}
-
-void CLayers::InitTilemapSkip()
-{
-	for(int g = 0; g < NumGroups(); g++)
-	{
-		CMapItemGroup *pGroup = GetGroup(g);
-
-		for(int l = 0; l < pGroup->m_NumLayers; l++)
-		{
-			CMapItemLayer *pLayer = GetLayer(pGroup->m_StartLayer+l);
-
-			if(pLayer->m_Type == LAYERTYPE_TILES)
-			{
-				CMapItemLayerTilemap *pTmap = (CMapItemLayerTilemap *)pLayer;
-				CTile *pTiles = (CTile *)Map()->GetData(pTmap->m_Data);
-				for(int y = 0; y < pTmap->m_Height; y++)
+				else if(pTilemap->m_Flags&TILESLAYERFLAG_TELE)
 				{
-					for(int x = 1; x < pTmap->m_Width;)
-					{
-						int sx;
-						for(sx = 1; x+sx < pTmap->m_Width && sx < 255; sx++)
-						{
-							if(pTiles[y*pTmap->m_Width+x+sx].m_Index)
-								break;
-						}
-
-						pTiles[y*pTmap->m_Width+x].m_Skip = sx-1;
-						x += sx;
-					}
+					if(pTilemap->m_Version < 3) // get the right values for tele layer
+						pTilemap->m_Tele = *((int*)(pTilemap)+15);
+					m_pTeleLayer = pTilemap;
+				}
+				else if(pTilemap->m_Flags&TILESLAYERFLAG_SPEEDUP)
+				{
+					if(pTilemap->m_Version < 3) // get the right values for speedup layer
+						pTilemap->m_Speedup = *((int*)(pTilemap)+16);
+					m_pSpeedupLayer = pTilemap;
 				}
 			}
 		}

@@ -4,8 +4,8 @@
 #include <engine/graphics.h>
 #include <engine/textrender.h>
 
-#include <generated/protocol.h>
-#include <generated/client_data.h>
+#include <game/generated/protocol.h>
+#include <game/generated/client_data.h>
 
 #include <game/layers.h>
 
@@ -19,7 +19,7 @@
 
 void CDebugHud::RenderNetCorrections()
 {
-	if(!Config()->m_Debug || Config()->m_DbgGraphs || !m_pClient->m_Snap.m_pLocalCharacter || !m_pClient->m_Snap.m_pLocalPrevCharacter)
+	if(!g_Config.m_Debug || g_Config.m_DbgGraphs || !m_pClient->m_Snap.m_pLocalCharacter || !m_pClient->m_Snap.m_pLocalPrevCharacter)
 		return;
 
 	float Width = 300*Graphics()->ScreenAspect();
@@ -31,52 +31,49 @@ void CDebugHud::RenderNetCorrections()
 	float Velspeed = length(vec2(m_pClient->m_Snap.m_pLocalCharacter->m_VelX/256.0f, m_pClient->m_Snap.m_pLocalCharacter->m_VelY/256.0f))*50;
 	float Ramp = VelocityRamp(Velspeed, m_pClient->m_Tuning.m_VelrampStart, m_pClient->m_Tuning.m_VelrampRange, m_pClient->m_Tuning.m_VelrampCurvature);
 
-	const char *paStrings[] = {"velspeed:", "velspeed*ramp:", "ramp:", "Pos", " x:", " y:", "netmsg failed on:", "netobj num failures:", "netobj failed on:"};
+	const char *paStrings[] = {"velspeed:", "velspeed*ramp:", "ramp:", "Pos", " x:", " y:", "netobj corrections", " num:", " on:"};
 	const int Num = sizeof(paStrings)/sizeof(char *);
 	const float LineHeight = 6.0f;
 	const float Fontsize = 5.0f;
 
 	float x = Width-100.0f, y = 50.0f;
 	for(int i = 0; i < Num; ++i)
-		TextRender()->Text(0, x, y+i*LineHeight, Fontsize, paStrings[i], -1.0f);
+		TextRender()->Text(0, x, y+i*LineHeight, Fontsize, paStrings[i], -1);
 
 	x = Width-10.0f;
 	char aBuf[128];
 	str_format(aBuf, sizeof(aBuf), "%.0f", Velspeed/32);
-	float w = TextRender()->TextWidth(0, Fontsize, aBuf, -1, -1.0f);
-	TextRender()->Text(0, x-w, y, Fontsize, aBuf, -1.0f);
+	float w = TextRender()->TextWidth(0, Fontsize, aBuf, -1);
+	TextRender()->Text(0, x-w, y, Fontsize, aBuf, -1);
 	y += LineHeight;
 	str_format(aBuf, sizeof(aBuf), "%.0f", Velspeed/32*Ramp);
-	w = TextRender()->TextWidth(0, Fontsize, aBuf, -1, -1.0f);
-	TextRender()->Text(0, x-w, y, Fontsize, aBuf, -1.0f);
+	w = TextRender()->TextWidth(0, Fontsize, aBuf, -1);
+	TextRender()->Text(0, x-w, y, Fontsize, aBuf, -1);
 	y += LineHeight;
 	str_format(aBuf, sizeof(aBuf), "%.2f", Ramp);
-	w = TextRender()->TextWidth(0, Fontsize, aBuf, -1, -1.0f);
-	TextRender()->Text(0, x-w, y, Fontsize, aBuf, -1.0f);
+	w = TextRender()->TextWidth(0, Fontsize, aBuf, -1);
+	TextRender()->Text(0, x-w, y, Fontsize, aBuf, -1);
 	y += 2*LineHeight;
 	str_format(aBuf, sizeof(aBuf), "%d", m_pClient->m_Snap.m_pLocalCharacter->m_X/32);
-	w = TextRender()->TextWidth(0, Fontsize, aBuf, -1, -1.0f);
-	TextRender()->Text(0, x-w, y, Fontsize, aBuf, -1.0f);
+	w = TextRender()->TextWidth(0, Fontsize, aBuf, -1);
+	TextRender()->Text(0, x-w, y, Fontsize, aBuf, -1);
 	y += LineHeight;
 	str_format(aBuf, sizeof(aBuf), "%d", m_pClient->m_Snap.m_pLocalCharacter->m_Y/32);
-	w = TextRender()->TextWidth(0, Fontsize, aBuf, -1,-1.0f);
-	TextRender()->Text(0, x-w, y, Fontsize, aBuf, -1.0f);
+	w = TextRender()->TextWidth(0, Fontsize, aBuf, -1);
+	TextRender()->Text(0, x-w, y, Fontsize, aBuf, -1);
+	y += 2*LineHeight;
+	str_format(aBuf, sizeof(aBuf), "%d", m_pClient->NetobjNumCorrections());
+	w = TextRender()->TextWidth(0, Fontsize, aBuf, -1);
+	TextRender()->Text(0, x-w, y, Fontsize, aBuf, -1);
 	y += LineHeight;
-	w = TextRender()->TextWidth(0, Fontsize, m_pClient->NetmsgFailedOn(), -1, -1.0f);
-	TextRender()->Text(0, x-w, y, Fontsize, m_pClient->NetmsgFailedOn(), -1.0f);
-	y += LineHeight;
-	str_format(aBuf, sizeof(aBuf), "%d", m_pClient->NetobjNumFailures());
-	w = TextRender()->TextWidth(0, Fontsize, aBuf, -1, -1.0f);
-	TextRender()->Text(0, x-w, y, Fontsize, aBuf, -1.0f);
-	y += LineHeight;
-	w = TextRender()->TextWidth(0, Fontsize, m_pClient->NetobjFailedOn(), -1, -1.0f);
-	TextRender()->Text(0, x-w, y, Fontsize, m_pClient->NetobjFailedOn(), -1.0f);
+	w = TextRender()->TextWidth(0, Fontsize, m_pClient->NetobjCorrectedOn(), -1);
+	TextRender()->Text(0, x-w, y, Fontsize, m_pClient->NetobjCorrectedOn(), -1);
 }
 
 void CDebugHud::RenderTuning()
 {
 	// render tuning debugging
-	if(!Config()->m_DbgTuning)
+	if(!g_Config.m_DbgTuning)
 		return;
 
 	CTuningParams StandardTuning;
@@ -102,23 +99,23 @@ void CDebugHud::RenderTuning()
 
 		str_format(aBuf, sizeof(aBuf), "%.2f", Standard);
 		x += 20.0f;
-		w = TextRender()->TextWidth(0, 5, aBuf, -1, -1.0f);
-		TextRender()->Text(0x0, x-w, y+Count*6, 5, aBuf, -1.0f);
+		w = TextRender()->TextWidth(0, 5, aBuf, -1);
+		TextRender()->Text(0x0, x-w, y+Count*6, 5, aBuf, -1);
 
 		str_format(aBuf, sizeof(aBuf), "%.2f", Current);
 		x += 20.0f;
-		w = TextRender()->TextWidth(0, 5, aBuf, -1, -1.0f);
-		TextRender()->Text(0x0, x-w, y+Count*6, 5, aBuf, -1.0f);
+		w = TextRender()->TextWidth(0, 5, aBuf, -1);
+		TextRender()->Text(0x0, x-w, y+Count*6, 5, aBuf, -1);
 
 		x += 5.0f;
-		TextRender()->Text(0x0, x, y+Count*6, 5, m_pClient->m_Tuning.m_apNames[i], -1.0f);
+		TextRender()->Text(0x0, x, y+Count*6, 5, m_pClient->m_Tuning.m_apNames[i], -1);
 
 		Count++;
 	}
 
 	y = y+Count*6;
 
-	Graphics()->TextureClear();
+	Graphics()->TextureSet(-1);
 	Graphics()->BlendNormal();
 	Graphics()->LinesBegin();
 	float Height = 50.0f;
