@@ -462,6 +462,8 @@ void CGameContext::SwapTeams()
 	if(!m_pController->IsTeamplay())
 		return;
 
+	m_pController->m_PlayerTeamRed = !m_pController->m_PlayerTeamRed;
+
 	SendChat(-1, CGameContext::CHAT_ALL, "Teams were swapped");
 
 	for(int i = 0; i < MAX_CLIENTS; ++i)
@@ -654,7 +656,15 @@ void CGameContext::OnClientConnected(int ClientID)
 		m_apPlayers[ClientID] = 0;
 	}
 	// Check which team the player should be on
-	const int StartTeam = g_Config.m_SvTournamentMode ? TEAM_SPECTATORS : m_pController->GetAutoTeam(ClientID);
+	int StartTeam = g_Config.m_SvTournamentMode ? TEAM_SPECTATORS : m_pController->GetAutoTeam(ClientID);
+
+	if (g_Config.m_SvBotVsHuman && StartTeam != TEAM_SPECTATORS) {
+		if (m_pController->m_PlayerTeamRed) {
+			StartTeam = TEAM_RED;
+		} else {
+			StartTeam = TEAM_BLUE;
+		}
+	}
 
 	m_apPlayers[ClientID] = new(ClientID) CPlayer(this, ClientID, StartTeam);
 	//players[client_id].init(client_id);
@@ -1003,7 +1013,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 			if(aCmd[0])
 			{
 				SendChat(-1, CGameContext::CHAT_ALL, aChatmsg);
-				StartVoteAs(aDesc, aCmd, pReason, pPlayer);
+				StartVoteAs(aDesc, aCmd, "", pPlayer);
 			}
 		}
 		else if(MsgID == NETMSGTYPE_CL_VOTE)
@@ -1064,8 +1074,16 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 					(void)m_pController->CheckTeamBalance();
 					pPlayer->m_TeamChangeTick = Server()->Tick();
 				}
-				else
-					SendBroadcast("Teams must be balanced, please join other team", ClientID);
+				else {
+					if (g_Config.m_SvBotVsHuman) {
+						char aDesc[VOTE_DESC_LENGTH] = "switch";
+						char aCmd[VOTE_CMD_LENGTH] = "switch";
+
+						StartVoteAs(aDesc, aCmd, "", pPlayer);
+					} else {
+						SendBroadcast("Teams must be balanced, please join other team", ClientID);
+					}
+				}
 			}
 			else
 			{
@@ -1406,6 +1424,11 @@ void CGameContext::ConSetTeamAll(IConsole::IResult *pResult, void *pUserData)
 void CGameContext::ConSwapTeams(IConsole::IResult *pResult, void *pUserData)
 {
 	CGameContext *pSelf = (CGameContext *)pUserData;
+	if (g_Config.m_SvBotVsHuman) {
+		pSelf->SendChat(-1, CGameContext::CHAT_ALL, "Cannot swap in bot vs human mode. Use switch instead.");
+		return;
+	}
+
 	pSelf->SwapTeams();
 }
 
@@ -1414,6 +1437,11 @@ void CGameContext::ConShuffleTeams(IConsole::IResult *pResult, void *pUserData)
 	CGameContext *pSelf = (CGameContext *)pUserData;
 	if(!pSelf->m_pController->IsTeamplay())
 		return;
+
+	if (g_Config.m_SvBotVsHuman) {
+		pSelf->SendChat(-1, CGameContext::CHAT_ALL, "Cannot shuffle in bot vs human mode");
+		return;
+	}
 
 	int CounterRed = 0;
 	int CounterBlue = 0;
@@ -1797,6 +1825,19 @@ void CGameContext::ConUnFreeze(IConsole::IResult *pResult, void *pUserData)
 	pSelf->GetPlayerChar(ClientID)->Melt(-1);
 }
 
+void CGameContext::ConSwitch(IConsole::IResult *pResult, void *pUserData) {
+	if (!g_Config.m_SvBotVsHuman) {
+		return;
+	}
+	CGameContext *pSelf = (CGameContext *)pUserData;
+	pSelf->m_pController->DoWarmup(g_Config.m_SvBotSwitchTime);
+	pSelf->m_pController->m_PlayerTeamRed = !pSelf->m_pController->m_PlayerTeamRed;
+	char aBuf[128];
+
+	str_format(aBuf, sizeof(aBuf), "Switching sides in %d seconds!", g_Config.m_SvBotSwitchTime);
+	pSelf->SendChat(-1, CHAT_ALL, aBuf);
+}
+
 void CGameContext::ConMuteSpec(IConsole::IResult *pResult, void *pUserData)
 {
 	CGameContext *pSelf = (CGameContext *)pUserData;
@@ -2021,6 +2062,8 @@ void CGameContext::OnConsoleInit()
 	Console()->Register("set_name", "ir", CFGFLAG_SERVER, ConSetName, this, "Set the name of a player");
 	Console()->Register("set_clan", "ir", CFGFLAG_SERVER, ConSetClan, this, "Set the clan of a player");
 	Console()->Register("kill", "i", CFGFLAG_SERVER, ConKill, this, "Kill a player");
+	Console()->Register("switch", "", CFGFLAG_SERVER, ConSwitch, this, "Switch teams");
+
 #ifdef USECHEATS
 	Console()->Register("give", "ii?i", CFGFLAG_SERVER, ConGive, this, "Give a player the a weapon (-2=Award;-1=All weapons;0=Hammer;1=Gun;2=Shotgun;3=Grenade;4=Riffle,5=Ninja)");
 	Console()->Register("takeweapon", "ii", CFGFLAG_SERVER, ConTakeWeapon, this, "Takes away a weapon of a player (-2=Award;-1=All weapons;0=Hammer;1=Gun;2=Shotgun;3=Grenade;4=Riffle");
@@ -2192,9 +2235,33 @@ void CGameContext::DeleteBot(int i) {
 }
 
 bool CGameContext::AddBot(int i, bool UseDropPlayer) {
-	const int StartTeam = g_Config.m_SvTournamentMode ? TEAM_SPECTATORS : m_pController->GetAutoTeam(i);
+	int StartTeam = g_Config.m_SvTournamentMode ? TEAM_SPECTATORS : m_pController->GetAutoTeam(i);
 	if(StartTeam == TEAM_SPECTATORS)
 		return false;
+
+	int TeamCount[2];
+	TeamCount[0] = 0;
+	TeamCount[1] = 0;
+
+	if (g_Config.m_SvBotVsHuman) {
+		for(int i = 0; i < MAX_CLIENTS; i++) {
+			if (m_apPlayers[i] && !m_apPlayers[i]->IsBot()) {
+				const int team = m_apPlayers[i]->GetTeam();
+				if (team != TEAM_SPECTATORS) {
+					TeamCount[team]++;
+				}
+			}
+		}
+	}
+
+	if (TeamCount[TEAM_BLUE] == 0) {
+		StartTeam = TEAM_BLUE;
+	}
+
+	if (TeamCount[TEAM_RED] == 0) {
+		StartTeam = TEAM_RED;
+	}
+
 	if(Server()->NewBot(i) == 1)
 		return false;
 	dbg_msg("context","Add a bot at slot: %d", i);
@@ -2220,6 +2287,8 @@ bool CGameContext::ReplacePlayerByBot(int ClientID) {
 	}
 	if(!PlayerCount || BotNumber >= g_Config.m_SvBotSlots)
 		return false;
+	if(g_Config.m_SvBotVsHuman && BotNumber > PlayerCount)
+		return false;
 	return AddBot(ClientID, true);
 }
 
@@ -2236,10 +2305,16 @@ void CGameContext::CheckBotNumber() {
 	}
 	if(!PlayerCount)
 		BotNumber += g_Config.m_SvBotSlots;
+
+	int MaxCount = g_Config.m_SvBotSlots;
+	if (g_Config.m_SvBotVsHuman) {
+		MaxCount = PlayerCount;
+	}
+
 	// Remove bot excedent
-	if(BotNumber-g_Config.m_SvBotSlots > 0)	{
+	if(BotNumber-MaxCount > 0)	{
 		int FirstBot = 0;
-		for(int i = 0 ; i < BotNumber-g_Config.m_SvBotSlots ; i++) {
+		for(int i = 0 ; i < BotNumber-MaxCount ; i++) {
 			for(; FirstBot < MAX_CLIENTS ; FirstBot++)
 				if(m_apPlayers[FirstBot] && m_apPlayers[FirstBot]->m_IsBot)
 					break;
@@ -2247,10 +2322,11 @@ void CGameContext::CheckBotNumber() {
 				DeleteBot(FirstBot);
 		}
 	}
+
 	// Add missing bot if possible
-	if(g_Config.m_SvBotSlots-BotNumber > 0) {
+	if(MaxCount-BotNumber > 0) {
 		int LastFreeSlot = Server()->MaxClients()-1;
-		for(int i = 0 ; i < g_Config.m_SvBotSlots-BotNumber ; i++) {
+		for(int i = 0 ; i < MaxCount-BotNumber ; i++) {
 			for(; LastFreeSlot >= 0 ; LastFreeSlot--)
 				if(!m_apPlayers[LastFreeSlot])
 					break;

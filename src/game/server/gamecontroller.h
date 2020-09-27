@@ -63,6 +63,8 @@ protected:
 public:
 	const char *m_pGameType;
 
+	bool m_PlayerTeamRed;
+
 	bool IsTeamplay() const;
 	bool IsFlagGame() const;
 	bool IsGameOver() const { return m_GameOverTick != -1; }

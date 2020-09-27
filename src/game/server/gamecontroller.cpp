@@ -17,6 +17,7 @@ IGameController::IGameController(class CGameContext *pGameServer)
 	m_pGameServer = pGameServer;
 	m_pServer = m_pGameServer->Server();
 	m_pGameType = "unknown";
+	m_PlayerTeamRed = true;
 
 	//
 	DoWarmup(g_Config.m_SvWarmup);
@@ -225,13 +226,35 @@ void IGameController::StartRound()
 {
 	ResetGame();
 
-	for(int i = 0; i < MAX_CLIENTS; i++)
-		if(GameServer()->m_apPlayers[i])
+	for(int i = 0; i < MAX_CLIENTS; i++) {
+		CPlayer* pPlayer = GameServer()->m_apPlayers[i];
+		if(pPlayer)
 		{
-			mem_zero(&GameServer()->m_apPlayers[i]->m_Stats, sizeof(GameServer()->m_apPlayers[i]->m_Stats));
-			GameServer()->m_apPlayers[i]->m_GotAward = false;
-			GameServer()->m_apPlayers[i]->m_Spree = 0;
+			mem_zero(&pPlayer->m_Stats, sizeof(GameServer()->m_apPlayers[i]->m_Stats));
+			pPlayer->m_GotAward = false;
+			pPlayer->m_Spree = 0;
+
+			const int team = pPlayer->GetTeam();
+
+			if (g_Config.m_SvBotVsHuman) {
+				if (m_PlayerTeamRed) {
+					if (pPlayer->m_IsBot && team == TEAM_RED) {
+						pPlayer->SetTeam(TEAM_BLUE, false);
+					}
+					if (!pPlayer->m_IsBot && team != TEAM_RED) {
+						pPlayer->SetTeam(TEAM_RED, false);
+					}
+				} else {
+					if (pPlayer->m_IsBot && team != TEAM_RED) {
+						pPlayer->SetTeam(TEAM_RED, false);
+					}
+					if (!pPlayer->m_IsBot && team == TEAM_RED) {
+						pPlayer->SetTeam(TEAM_BLUE, false);
+					}
+				}
+			}
 		}
+	}
 
 	m_RoundStartTick = Server()->Tick();
 	m_SuddenDeath = 0;

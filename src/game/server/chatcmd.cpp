@@ -124,6 +124,16 @@ bool CGameContext::ShowCommand(int ClientID, CPlayer* pPlayer, const char* pMess
 		}
 		return true;
 	}
+	else if(StrLeftComp(pMessage, "switch"))
+	{
+		if(CanStartVote(pPlayer))
+		{
+			char aDesc[VOTE_DESC_LENGTH] = "switch";
+			char aCmd[VOTE_CMD_LENGTH] = "switch";
+
+			StartVoteAs(aDesc, aCmd, "", pPlayer);
+		}
+	}
 	else if(StrLeftComp(pMessage, "1on1") || StrLeftComp(pMessage, "2on2") || StrLeftComp(pMessage, "3on3") ||
 			StrLeftComp(pMessage, "4on4") || StrLeftComp(pMessage, "5on5") || StrLeftComp(pMessage, "6on6"))
 	{

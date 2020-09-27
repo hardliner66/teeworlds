@@ -78,6 +78,7 @@ class CGameContext : public IGameServer
 	static void ConSetName(IConsole::IResult *pResult, void *pUserData);
 	static void ConSetClan(IConsole::IResult *pResult, void *pUserData);
 	static void ConKill(IConsole::IResult *pResult, void *pUserData);
+	static void ConSwitch(IConsole::IResult *pResult, void *pUserData);
 #ifdef USECHEATS
 	static void ConGive(IConsole::IResult *pResult, void *pUserData);
 	static void ConTakeWeapon(IConsole::IResult *pResult, void *pUserData);
