@@ -22,6 +22,7 @@
 
 #include "gamemodes/race.h"
 #include "gamemodes/fastcap.h"
+#include "gamemodes/itrain.h"
 #include "score.h"
 #include "score/file_score.h"
 #if defined(CONF_SQL)
@@ -31,6 +32,7 @@
 #include "score/wa_score.h"
 #include "webapp.h"
 #endif
+
 
 enum
 {
@@ -55,7 +57,7 @@ void CGameContext::Construct(int Resetting)
 
 	if(Resetting==NO_RESET)
 		m_pVoteOptionHeap = new CHeap();
-	
+
 	m_pScore = 0;
 #if defined(CONF_TEERACE)
 	m_pWebapp = 0;
@@ -439,7 +441,7 @@ void CGameContext::SwapTeams()
 {
 	if(!m_pController->IsTeamplay())
 		return;
-	
+
 	SendChat(-1, CGameContext::CHAT_ALL, "Teams were swapped");
 
 	for(int i = 0; i < MAX_CLIENTS; ++i)
@@ -455,7 +457,7 @@ void CGameContext::OnTick()
 {
 	// check tuning
 	CheckPureTuning();
-	
+
 	Score()->Tick();
 #if defined(CONF_TEERACE)
 	if(m_pWebapp)
@@ -592,7 +594,7 @@ void CGameContext::OnClientEnter(int ClientID)
 
 
 	m_apPlayers[ClientID]->m_Score = -9999;
-	
+
 	// init the player
 	Score()->OnPlayerInit(ClientID);
 	SendRaceStartData(ClientID);
@@ -699,7 +701,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 
 			CNetMsg_Cl_Say *pMsg = (CNetMsg_Cl_Say *)pRawMsg;
 			int Team = pMsg->m_Team ? pPlayer->GetTeam() : CGameContext::CHAT_ALL;
-			
+
 			// trim right and set maximum length to 128 utf8-characters
 			int Length = 0;
 			const char *p = pMsg->m_pMessage;
@@ -1034,7 +1036,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 
 			if(pUnpacker->Error() && !DDNetClient)
 				RaceClient = 1;
-			
+
 			if(RaceClient)
 			{
 				pCustom->m_Type = CCustomClient::CLIENT_RACE;
@@ -1290,7 +1292,7 @@ void CGameContext::ConShuffleTeams(IConsole::IResult *pResult, void *pUserData)
 		if(pSelf->m_apPlayers[i] && pSelf->m_apPlayers[i]->GetTeam() != TEAM_SPECTATORS)
 			++PlayerTeam;
 	PlayerTeam = (PlayerTeam+1)/2;
-	
+
 	pSelf->SendChat(-1, CGameContext::CHAT_ALL, "Teams were shuffled");
 
 	for(int i = 0; i < MAX_CLIENTS; ++i)
@@ -1302,7 +1304,7 @@ void CGameContext::ConShuffleTeams(IConsole::IResult *pResult, void *pUserData)
 			else if(CounterBlue == PlayerTeam)
 				pSelf->m_apPlayers[i]->SetTeam(TEAM_RED, false);
 			else
-			{	
+			{
 				if(rand() % 2)
 				{
 					pSelf->m_apPlayers[i]->SetTeam(TEAM_BLUE, false);
@@ -1666,6 +1668,8 @@ void CGameContext::OnInit(/*class IKernel *pKernel*/)
 
 	if(str_find_nocase(g_Config.m_SvGametype, "cap"))
 		m_pController = new CGameControllerFC(this);
+	else if(str_find_nocase(g_Config.m_SvGametype, "itrain"))
+		m_pController = new CGameControllerITrain(this);
 	else
 		m_pController = new CGameControllerRACE(this);
 
@@ -1729,7 +1733,7 @@ void CGameContext::OnInit(/*class IKernel *pKernel*/)
 
 	m_Tuning.m_PlayerCollision = 0;
 	m_Tuning.m_PlayerHooking = 0;
-		
+
 	// setup core world
 	//for(int i = 0; i < MAX_CLIENTS; i++)
 	//	game.players[i].core.world = &game.world.core;

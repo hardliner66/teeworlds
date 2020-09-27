@@ -1,0 +1,38 @@
+#ifndef GAME_SERVER_GAMEMODES_ITRAIN_H
+#define GAME_SERVER_GAMEMODES_ITRAIN_H
+#include "race.h"
+
+class CGameControllerITrain : public CGameControllerRACE
+{
+	class CFlag *m_apFlags[2];
+	class CFlag *m_apPlFlags[MAX_CLIENTS];
+
+	bool IsOwnFlagStand(vec2 Pos, int Team) const;
+	bool IsEnemyFlagStand(vec2 Pos, int Team) const;
+
+protected:
+	virtual bool IsStart(int TilePos, vec2 Pos, int Team) const { return IsEnemyFlagStand(Pos, Team); }
+	virtual bool IsEnd(int TilePos, vec2 Pos, int Team) const { return IsOwnFlagStand(Pos, Team); }
+
+	virtual void OnRaceStart(int ID, int StartAddTime);
+	virtual void OnRaceEnd(int ID, int FinishTime);
+
+public:
+	CGameControllerITrain(class CGameContext *pGameServer);
+
+	virtual bool CanBeMovedOnBalance(int Cid);
+
+	virtual bool OnEntity(int Index, vec2 Pos);
+	virtual void OnCharacterSpawn(class CCharacter *pChr);
+	virtual bool CanSpawn(int Team, vec2 *pOutPos);
+
+	virtual bool IsFastCap() const { return true; }
+
+	virtual bool CanStartRace(int ID) const;
+
+	virtual void Snap(int SnappingClient);
+
+	virtual bool IsInstagib() { return true; }
+};
+
+#endif

@@ -67,6 +67,8 @@ public:
 	bool IsTeamplay() const;
 	bool IsGameOver() const { return m_GameOverTick != -1; }
 
+	virtual bool IsInstagib() { return false; }
+
 	IGameController(class CGameContext *pGameServer);
 	virtual ~IGameController();
 
@@ -144,7 +146,7 @@ public:
 	int ClampTeam(int Team);
 
 	virtual void PostReset();
-	
+
 	// fast cap
 	virtual bool IsFastCap() const { return false; }
 };
