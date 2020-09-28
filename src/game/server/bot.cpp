@@ -1,5 +1,3 @@
-#include <iostream>
-
 #include <game/generated/protocol.h>
 #include <game/gamecore.h>
 #include <engine/serverbrowser.h>

@@ -2403,6 +2403,10 @@ bool CGameContext::AddBot(int i, bool UseDropPlayer) {
 	return true;
 }
 
+void CGameContext::SendLeaveMessage(int ClientID, const char* pReason) {
+	m_apPlayers[ClientID]->SendLeaveMessage(pReason);
+}
+
 bool CGameContext::ReplacePlayerByBot(int ClientID) {
 	if (!g_Config.m_SvBotsEnabled) {
 		return false;

@@ -98,6 +98,7 @@ public:
 
 	virtual void DeleteBot(int i) = 0;
 	virtual bool ReplacePlayerByBot(int ClientID) = 0;
+	virtual void SendLeaveMessage(int ClientID, const char* pReason) = 0;
 
 	virtual const char *GameType() = 0;
 	virtual const char *Version() = 0;

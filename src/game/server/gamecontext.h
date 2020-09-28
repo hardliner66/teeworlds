@@ -190,6 +190,7 @@ public:
 	virtual void DeleteBot(int i);
 	bool AddBot(int i, bool UseDropPlayer = false);
 	virtual bool ReplacePlayerByBot(int ClientID);
+	void SendLeaveMessage(int ClientID, const char* pReason);
 	void CheckBotNumber();
 
 	//

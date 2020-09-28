@@ -5,7 +5,6 @@
 #include "player.h"
 #include "bot.h"
 
-
 MACRO_ALLOC_POOL_ID_IMPL(CPlayer, MAX_CLIENTS)
 
 IServer *CPlayer::Server() const { return m_pGameServer->Server(); }
@@ -190,10 +189,7 @@ void CPlayer::Snap(int SnappingClient)
 	}
 }
 
-void CPlayer::OnDisconnect(const char *pReason)
-{
-	KillCharacter();
-
+void CPlayer::SendLeaveMessage(const char* pReason) {
 	if(Server()->ClientIngame(m_ClientID))
 	{
 		char aBuf[512];
@@ -206,6 +202,13 @@ void CPlayer::OnDisconnect(const char *pReason)
 		str_format(aBuf, sizeof(aBuf), "leave player='%d:%s'", m_ClientID, Server()->ClientName(m_ClientID));
 		GameServer()->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "game", aBuf);
 	}
+}
+
+void CPlayer::OnDisconnect(const char *pReason)
+{
+	KillCharacter();
+
+	// SendLeaveMessage(pReason);
 }
 
 void CPlayer::OnPredictedInput(CNetObj_PlayerInput *NewInput)
