@@ -401,9 +401,10 @@ void CBot::HandleHook(bool SeeTarget)
 			m_InputData.m_Hook = 1;
 		else if(!m_InputData.m_Fire)
 		{
-			if(dist < Tuning()->m_HookLength*0.9f)
+			const float HookReach = Tuning()->m_HookLength * ((float)(g_Config.m_SvBotHookReach) / 99.99f);
+			if(dist < HookReach)
 				m_InputData.m_Hook = m_LastData.m_Hook^1;
-			SeeTarget = dist < Tuning()->m_HookLength*0.9f;
+			SeeTarget = dist < HookReach;
 		}
 	}
 	if(!SeeTarget)
@@ -516,7 +517,7 @@ void CBot::HandleWeapon(bool SeeTarget)
 			Weapon = WEAPON_HAMMER;
 			break;
 		}
-		else if(pMe->GetAmmoCount(WEAPON_RIFLE) != 0 && ClosestRange < GameServer()->Tuning()->m_LaserReach && !Collision()->FastIntersectLine(Pos, apTarget[c]->m_Pos, 0, 0))
+		else if(pMe->GetAmmoCount(WEAPON_RIFLE) != 0 && ClosestRange <= (GameServer()->Tuning()->m_LaserReach * ((float)g_Config.m_SvBotReach / 99.99f)) && !Collision()->FastIntersectLine(Pos, apTarget[c]->m_Pos, 0, 0))
 		{
 			Weapon = WEAPON_RIFLE;
 			break;

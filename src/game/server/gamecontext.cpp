@@ -1875,60 +1875,80 @@ void CGameContext::ConSetDifficulty(IConsole::IResult *pResult, void *pUserData)
 			g_Config.m_SvBotAllowMove = 0;
 			g_Config.m_SvBotAllowHook = 0;
 			g_Config.m_SvBotAllowFire = 0;
+			g_Config.m_SvBotReach = 100;
+			g_Config.m_SvBotHookReach = 100;
 		}break;
 		case DIFFICULTY_PEACEFUL_NO_HOOK: {
 			g_Config.m_SvBotAccuracy = 0;
 			g_Config.m_SvBotAllowMove = 1;
 			g_Config.m_SvBotAllowHook = 0;
 			g_Config.m_SvBotAllowFire = 0;
+			g_Config.m_SvBotReach = 100;
+			g_Config.m_SvBotHookReach = 100;
 		}break;
 		case DIFFICULTY_PEACEFUL: {
 			g_Config.m_SvBotAccuracy = 0;
 			g_Config.m_SvBotAllowMove = 1;
 			g_Config.m_SvBotAllowHook = 1;
 			g_Config.m_SvBotAllowFire = 0;
+			g_Config.m_SvBotReach = 100;
+			g_Config.m_SvBotHookReach = 100;
 		}break;
 		case DIFFICULTY_EASIEST: {
 			g_Config.m_SvBotAccuracy = 4;
 			g_Config.m_SvBotAllowMove = 1;
 			g_Config.m_SvBotAllowHook = 0;
 			g_Config.m_SvBotAllowFire = 1;
+			g_Config.m_SvBotReach = 50;
+			g_Config.m_SvBotHookReach = 50;
 		}break;
 		case DIFFICULTY_VERY_EASY: {
 			g_Config.m_SvBotAccuracy = 20;
 			g_Config.m_SvBotAllowMove = 1;
 			g_Config.m_SvBotAllowHook = 0;
 			g_Config.m_SvBotAllowFire = 1;
+			g_Config.m_SvBotReach = 60;
+			g_Config.m_SvBotHookReach = 60;
 		}break;
 		case DIFFICULTY_EASY: {
-			g_Config.m_SvBotAccuracy = 36;
+			g_Config.m_SvBotAccuracy = 40;
 			g_Config.m_SvBotAllowMove = 1;
 			g_Config.m_SvBotAllowHook = 1;
 			g_Config.m_SvBotAllowFire = 1;
+			g_Config.m_SvBotReach = 70;
+			g_Config.m_SvBotHookReach = 70;
+		}break;
+		case DIFFICULTY_MEDIUM: {
+			g_Config.m_SvBotAccuracy = 60;
+			g_Config.m_SvBotAllowMove = 1;
+			g_Config.m_SvBotAllowHook = 1;
+			g_Config.m_SvBotAllowFire = 1;
+			g_Config.m_SvBotReach = 80;
+			g_Config.m_SvBotHookReach = 80;
 		}break;
 		case DIFFICULTY_HARD: {
-			g_Config.m_SvBotAccuracy = 70;
+			g_Config.m_SvBotAccuracy = 80;
 			g_Config.m_SvBotAllowMove = 1;
 			g_Config.m_SvBotAllowHook = 1;
 			g_Config.m_SvBotAllowFire = 1;
+			g_Config.m_SvBotReach = 90;
+			g_Config.m_SvBotHookReach = 90;
 		}break;
 		case DIFFICULTY_VERY_HARD: {
-			g_Config.m_SvBotAccuracy = 90;
+			g_Config.m_SvBotAccuracy = 95;
 			g_Config.m_SvBotAllowMove = 1;
 			g_Config.m_SvBotAllowHook = 1;
 			g_Config.m_SvBotAllowFire = 1;
+			g_Config.m_SvBotReach = 95;
+			g_Config.m_SvBotHookReach = 95;
 		}break;
 		case DIFFICULTY_GODLIKE: {
 			g_Config.m_SvBotAccuracy = 100;
 			g_Config.m_SvBotAllowMove = 1;
 			g_Config.m_SvBotAllowHook = 1;
 			g_Config.m_SvBotAllowFire = 1;
-		}break;
-		case DIFFICULTY_MEDIUM: {
-			g_Config.m_SvBotAccuracy = 52;
-			g_Config.m_SvBotAllowMove = 1;
-			g_Config.m_SvBotAllowHook = 1;
-			g_Config.m_SvBotAllowFire = 1;
+			g_Config.m_SvBotReach = 100;
+			g_Config.m_SvBotHookReach = 100;
 		}break;
 	}
 }
