@@ -2354,6 +2354,7 @@ IGameServer *CreateGameServer() { return new CGameContext; }
 void CGameContext::DeleteBot(int i) {
 	Server()->DelBot(i);
 	if(m_apPlayers[i] && m_apPlayers[i]->m_IsBot) {
+		m_apPlayers[i]->KillCharacter();
 		dbg_msg("context","Delete bot at slot: %d", i);
 		delete m_apPlayers[i];
 		m_apPlayers[i] = 0;
