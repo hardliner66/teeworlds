@@ -30,6 +30,8 @@ void CGameContext::Construct(int Resetting)
 	m_Resetting = 0;
 	m_pServer = 0;
 
+	m_BotDifficulty = DIFFICULTY_MEDIUM;
+
 	for(int i = 0; i < MAX_CLIENTS; i++)
 		m_apPlayers[i] = 0;
 
@@ -658,7 +660,7 @@ void CGameContext::OnClientConnected(int ClientID)
 	// Check which team the player should be on
 	int StartTeam = g_Config.m_SvTournamentMode ? TEAM_SPECTATORS : m_pController->GetAutoTeam(ClientID);
 
-	if (g_Config.m_SvBotVsHuman && StartTeam != TEAM_SPECTATORS) {
+	if (g_Config.m_SvBotsEnabled && g_Config.m_SvBotVsHuman && StartTeam != TEAM_SPECTATORS) {
 		if (m_pController->m_PlayerTeamRed) {
 			StartTeam = TEAM_RED;
 		} else {
@@ -1069,7 +1071,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 				if(m_pController->CanChangeTeam(pPlayer, pMsg->m_Team))
 				{
 					bool do_switch = false;
-					if (g_Config.m_SvBotVsHuman) {
+					if (g_Config.m_SvBotsEnabled && g_Config.m_SvBotVsHuman) {
 						if (m_pController->m_PlayerTeamRed && pMsg->m_Team == TEAM_RED) {
 							do_switch = true;
 						}
@@ -1091,7 +1093,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 					}
 				}
 				else if (pPlayer->GetTeam() != pMsg->m_Team) {
-					if (g_Config.m_SvBotVsHuman) {
+					if (g_Config.m_SvBotsEnabled && g_Config.m_SvBotVsHuman) {
 						char aDesc[VOTE_DESC_LENGTH] = "switch";
 						char aCmd[VOTE_CMD_LENGTH] = "switch";
 
@@ -1440,7 +1442,7 @@ void CGameContext::ConSetTeamAll(IConsole::IResult *pResult, void *pUserData)
 void CGameContext::ConSwapTeams(IConsole::IResult *pResult, void *pUserData)
 {
 	CGameContext *pSelf = (CGameContext *)pUserData;
-	if (g_Config.m_SvBotVsHuman) {
+	if (g_Config.m_SvBotsEnabled && g_Config.m_SvBotVsHuman) {
 		pSelf->SendChat(-1, CGameContext::CHAT_ALL, "Cannot swap in bot vs human mode. Use switch instead.");
 		return;
 	}
@@ -1454,7 +1456,7 @@ void CGameContext::ConShuffleTeams(IConsole::IResult *pResult, void *pUserData)
 	if(!pSelf->m_pController->IsTeamplay())
 		return;
 
-	if (g_Config.m_SvBotVsHuman) {
+	if (g_Config.m_SvBotsEnabled && g_Config.m_SvBotVsHuman) {
 		pSelf->SendChat(-1, CGameContext::CHAT_ALL, "Cannot shuffle in bot vs human mode");
 		return;
 	}
@@ -1842,7 +1844,7 @@ void CGameContext::ConUnFreeze(IConsole::IResult *pResult, void *pUserData)
 }
 
 void CGameContext::ConSwitch(IConsole::IResult *pResult, void *pUserData) {
-	if (!g_Config.m_SvBotVsHuman) {
+	if (g_Config.m_SvBotsEnabled && !g_Config.m_SvBotVsHuman) {
 		return;
 	}
 	CGameContext *pSelf = (CGameContext *)pUserData;
@@ -1852,6 +1854,83 @@ void CGameContext::ConSwitch(IConsole::IResult *pResult, void *pUserData) {
 
 	str_format(aBuf, sizeof(aBuf), "Switching sides in %d seconds!", g_Config.m_SvBotSwitchTime);
 	pSelf->SendChat(-1, CHAT_ALL, aBuf);
+}
+
+void CGameContext::ConSetDifficulty(IConsole::IResult *pResult, void *pUserData) {
+	if (!g_Config.m_SvBotsEnabled) {
+		return;
+	}
+	CGameContext *pSelf = (CGameContext *)pUserData;
+	int difficulty = pResult->GetInteger(0);
+
+	if (!ValidDifficulty(difficulty)) {
+		return;
+	}
+
+	pSelf->m_BotDifficulty = difficulty;
+
+	switch (difficulty) {
+		case DIFFICULTY_PEACEFUL_STATIONARY: {
+			g_Config.m_SvBotAccuracy = 0;
+			g_Config.m_SvBotAllowMove = 0;
+			g_Config.m_SvBotAllowHook = 0;
+			g_Config.m_SvBotAllowFire = 0;
+		}break;
+		case DIFFICULTY_PEACEFUL_NO_HOOK: {
+			g_Config.m_SvBotAccuracy = 0;
+			g_Config.m_SvBotAllowMove = 1;
+			g_Config.m_SvBotAllowHook = 0;
+			g_Config.m_SvBotAllowFire = 0;
+		}break;
+		case DIFFICULTY_PEACEFUL: {
+			g_Config.m_SvBotAccuracy = 0;
+			g_Config.m_SvBotAllowMove = 1;
+			g_Config.m_SvBotAllowHook = 1;
+			g_Config.m_SvBotAllowFire = 0;
+		}break;
+		case DIFFICULTY_EASIEST: {
+			g_Config.m_SvBotAccuracy = 4;
+			g_Config.m_SvBotAllowMove = 1;
+			g_Config.m_SvBotAllowHook = 0;
+			g_Config.m_SvBotAllowFire = 1;
+		}break;
+		case DIFFICULTY_VERY_EASY: {
+			g_Config.m_SvBotAccuracy = 20;
+			g_Config.m_SvBotAllowMove = 1;
+			g_Config.m_SvBotAllowHook = 0;
+			g_Config.m_SvBotAllowFire = 1;
+		}break;
+		case DIFFICULTY_EASY: {
+			g_Config.m_SvBotAccuracy = 36;
+			g_Config.m_SvBotAllowMove = 1;
+			g_Config.m_SvBotAllowHook = 1;
+			g_Config.m_SvBotAllowFire = 1;
+		}break;
+		case DIFFICULTY_HARD: {
+			g_Config.m_SvBotAccuracy = 70;
+			g_Config.m_SvBotAllowMove = 1;
+			g_Config.m_SvBotAllowHook = 1;
+			g_Config.m_SvBotAllowFire = 1;
+		}break;
+		case DIFFICULTY_VERY_HARD: {
+			g_Config.m_SvBotAccuracy = 90;
+			g_Config.m_SvBotAllowMove = 1;
+			g_Config.m_SvBotAllowHook = 1;
+			g_Config.m_SvBotAllowFire = 1;
+		}break;
+		case DIFFICULTY_GODLIKE: {
+			g_Config.m_SvBotAccuracy = 100;
+			g_Config.m_SvBotAllowMove = 1;
+			g_Config.m_SvBotAllowHook = 1;
+			g_Config.m_SvBotAllowFire = 1;
+		}break;
+		case DIFFICULTY_MEDIUM: {
+			g_Config.m_SvBotAccuracy = 52;
+			g_Config.m_SvBotAllowMove = 1;
+			g_Config.m_SvBotAllowHook = 1;
+			g_Config.m_SvBotAllowFire = 1;
+		}break;
+	}
 }
 
 void CGameContext::ConMuteSpec(IConsole::IResult *pResult, void *pUserData)
@@ -2079,6 +2158,7 @@ void CGameContext::OnConsoleInit()
 	Console()->Register("set_clan", "ir", CFGFLAG_SERVER, ConSetClan, this, "Set the clan of a player");
 	Console()->Register("kill", "i", CFGFLAG_SERVER, ConKill, this, "Kill a player");
 	Console()->Register("switch", "", CFGFLAG_SERVER, ConSwitch, this, "Switch teams");
+	Console()->Register("difficulty", "i", CFGFLAG_SERVER, ConSetDifficulty, this, "Change Difficulty");
 
 #ifdef USECHEATS
 	Console()->Register("give", "ii?i", CFGFLAG_SERVER, ConGive, this, "Give a player the a weapon (-2=Award;-1=All weapons;0=Hammer;1=Gun;2=Shotgun;3=Grenade;4=Riffle,5=Ninja)");
@@ -2087,6 +2167,16 @@ void CGameContext::OnConsoleInit()
 	Console()->Register("teleport", "ii", CFGFLAG_SERVER, ConTeleport, this, "Teleports a player to another");
 #endif
 	m_Mute.OnConsoleInit(m_pConsole);
+}
+
+void CGameContext::SendDifficulties(int ClientID) {
+	SendChatTarget(ClientID, "Valid difficulties are:");
+
+	for (auto diff : difficulties) {
+		char cBuf[32];
+		str_format(cBuf, sizeof(cBuf), "%s %d", GetDifficultyName(diff), diff);
+		SendChatTarget(ClientID, cBuf);
+	}
 }
 
 void CGameContext::OnInit(/*class IKernel *pKernel*/)
@@ -2262,7 +2352,7 @@ bool CGameContext::AddBot(int i, bool UseDropPlayer) {
 	TeamCount[0] = 0;
 	TeamCount[1] = 0;
 
-	if (g_Config.m_SvBotVsHuman) {
+	if (g_Config.m_SvBotsEnabled && g_Config.m_SvBotVsHuman) {
 		for(int i = 0; i < MAX_CLIENTS; i++) {
 			if (m_apPlayers[i] && !m_apPlayers[i]->IsBot()) {
 				const int team = m_apPlayers[i]->GetTeam();
@@ -2309,7 +2399,7 @@ bool CGameContext::ReplacePlayerByBot(int ClientID) {
 	}
 	if(!PlayerCount || BotNumber >= g_Config.m_SvBotSlots)
 		return false;
-	if(g_Config.m_SvBotVsHuman && BotNumber > PlayerCount)
+	if(!g_Config.m_SvBotsEnabled || (g_Config.m_SvBotVsHuman && BotNumber > PlayerCount))
 		return false;
 	return AddBot(ClientID, true);
 }

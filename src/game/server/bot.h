@@ -9,24 +9,103 @@
 #include "ai/genetics.h"
 #include "ai/strategy.h"
 
+enum BotDifficulty {
+	DIFFICULTY_PEACEFUL_STATIONARY = -3,
+	DIFFICULTY_PEACEFUL_NO_HOOK,
+	DIFFICULTY_PEACEFUL,
+	DIFFICULTY_EASIEST,
+	DIFFICULTY_VERY_EASY,
+	DIFFICULTY_EASY,
+	DIFFICULTY_MEDIUM,
+	DIFFICULTY_HARD,
+	DIFFICULTY_VERY_HARD,
+	DIFFICULTY_GODLIKE = 99
+};
+
+const BotDifficulty difficulties[10] = {
+	DIFFICULTY_PEACEFUL_STATIONARY,
+	DIFFICULTY_PEACEFUL_NO_HOOK,
+	DIFFICULTY_PEACEFUL,
+	DIFFICULTY_EASIEST,
+	DIFFICULTY_VERY_EASY,
+	DIFFICULTY_EASY,
+	DIFFICULTY_MEDIUM,
+	DIFFICULTY_HARD,
+	DIFFICULTY_VERY_HARD,
+	DIFFICULTY_GODLIKE
+};
+
+inline const bool ValidDifficulty(int difficulty) {
+	switch (difficulty) {
+		case DIFFICULTY_PEACEFUL_STATIONARY:
+		case DIFFICULTY_PEACEFUL_NO_HOOK:
+		case DIFFICULTY_PEACEFUL:
+		case DIFFICULTY_EASIEST:
+		case DIFFICULTY_VERY_EASY:
+		case DIFFICULTY_EASY:
+		case DIFFICULTY_MEDIUM:
+		case DIFFICULTY_HARD:
+		case DIFFICULTY_VERY_HARD:
+		case DIFFICULTY_GODLIKE:
+			return true;
+	}
+	return false;
+}
+
+inline const char* GetDifficultyName(int difficulty) {
+	switch (difficulty) {
+		case DIFFICULTY_PEACEFUL_STATIONARY: {
+			return "peaceful (stationary)";
+		}break;
+		case DIFFICULTY_PEACEFUL_NO_HOOK: {
+			return "peaceful (no hook)";
+		}break;
+		case DIFFICULTY_PEACEFUL: {
+			return "peaceful";
+		}break;
+		case DIFFICULTY_EASIEST: {
+			return "easiest";
+		}break;
+		case DIFFICULTY_VERY_EASY: {
+			return "very easy";
+		}break;
+		case DIFFICULTY_EASY: {
+			return "easy";
+		}break;
+		case DIFFICULTY_MEDIUM: {
+			return "medium";
+		}break;
+		case DIFFICULTY_HARD: {
+			return "hard";
+		}break;
+		case DIFFICULTY_VERY_HARD: {
+			return "very hard";
+		}break;
+		case DIFFICULTY_GODLIKE: {
+			return "godlike";
+		}break;
+	}
+	return "";
+}
+
 const char g_BotClan[12] = "Love";
 const char g_aBotName[MAX_CLIENTS][16] = {
-	"Anna",
-	"Bob",
-	"Carlos",
-	"David",
-	"Eli",
-	"Florianne",
-	"Gaia",
-	"Hannibal",
-	"Isis",
-	"Juda",
-	"Kevin",
-	"Lucile",
-	"Marc",
-	"Naustradamus",
-	"Ondine",
-	"Platon"
+	"[B]Anna",
+	"[B]Bob",
+	"[B]Carlos",
+	"[B]David",
+	"[B]Eli",
+	"[B]Florianne",
+	"[B]Gaia",
+	"[B]Hannibal",
+	"[B]Isis",
+	"[B]Juda",
+	"[B]Kevin",
+	"[B]Lucile",
+	"[B]Marc",
+	"[B]Naustradamus",
+	"[B]Ondine",
+	"[B]Platon"
 };
 
 const int g_aBotPriority[MAX_CLIENTS][8] = {
@@ -144,6 +223,8 @@ public:
 
 
 	int m_GenomeTick;
+	int m_ManualRespawnTick;
+	bool m_IsDead;
 
 	int GetID() { return m_SnapID; }
 	void Snap(int SnappingClient);

@@ -289,6 +289,7 @@ public:
 	int NetworkClipped(int SnappingClient, vec2 CheckPos);
 
 	void OnCharacterDeath(int Victim, int Killer, int Weapon);
+	void OnCharacterSpawn(int CID);
 	void RegisterBot(int CID, class CBot *pBot);
 	void UnRegisterBot(int CID);
 

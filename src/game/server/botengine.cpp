@@ -3,6 +3,7 @@
 #include <engine/serverbrowser.h>
 #include <engine/shared/config.h>
 #include <game/layers.h>
+#include <base/math.h>
 #include "gamecontext.h"
 
 #include "botengine.h"
@@ -999,10 +1000,67 @@ int CBotEngine::GetClosestVertex(vec2 Pos)
 	return i;
 }
 
+void CBotEngine::OnCharacterSpawn(int CID) {
+	if(m_apBot[CID]) {
+		m_apBot[CID]->m_IsDead = false;
+	}
+}
+
 void CBotEngine::OnCharacterDeath(int Victim, int Killer, int Weapon)
 {
-	if(m_apBot[Victim])
+	if(m_apBot[Victim]) {
 		m_apBot[Victim]->m_GenomeTick >>= 1;
+		int delay_min;
+		int delay_max;
+		switch (m_pGameServer->m_BotDifficulty) {
+			case DIFFICULTY_PEACEFUL_STATIONARY:
+				delay_min = 0;
+				delay_max = 0;
+				break;
+			case DIFFICULTY_PEACEFUL_NO_HOOK:
+				delay_min = 0;
+				delay_max = 0;
+				break;
+			case DIFFICULTY_PEACEFUL:
+				delay_min = 0;
+				delay_max = 0;
+				break;
+			case DIFFICULTY_EASIEST:
+				delay_min = 2;
+				delay_max = 3;
+				break;
+			case DIFFICULTY_VERY_EASY:
+				delay_min = 1;
+				delay_max = 3;
+				break;
+			case DIFFICULTY_EASY:
+				delay_min = 1;
+				delay_max = 3;
+				break;
+			case DIFFICULTY_MEDIUM:
+				delay_min = 1;
+				delay_max = 2;
+				break;
+			case DIFFICULTY_HARD:
+				delay_min = 1;
+				delay_max = 2;
+				break;
+			case DIFFICULTY_VERY_HARD:
+				delay_min = 0;
+				delay_max = 1;
+				break;
+			case DIFFICULTY_GODLIKE:
+				delay_min = 0;
+				delay_max = 0;
+				break;
+		}
+		delay_min = m_pGameServer->Server()->TickSpeed() * delay_min;
+		delay_max = m_pGameServer->Server()->TickSpeed() * delay_max;
+		int max_delay = m_pGameServer->Server()->TickSpeed() * 100;
+		int delay = random_int() % max_delay;
+		m_apBot[Victim]->m_ManualRespawnTick = m_pGameServer->Server()->Tick()+round_to_int(map_range(delay, 0, max_delay, delay_min, delay_max));
+		m_apBot[Victim]->m_IsDead = true;
+	}
 	if(m_apBot[Killer])
 		m_apBot[Killer]->m_GenomeTick <<= 1;
 }

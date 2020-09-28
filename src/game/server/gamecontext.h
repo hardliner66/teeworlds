@@ -79,6 +79,7 @@ class CGameContext : public IGameServer
 	static void ConSetClan(IConsole::IResult *pResult, void *pUserData);
 	static void ConKill(IConsole::IResult *pResult, void *pUserData);
 	static void ConSwitch(IConsole::IResult *pResult, void *pUserData);
+	static void ConSetDifficulty(IConsole::IResult *pResult, void *pUserData);
 #ifdef USECHEATS
 	static void ConGive(IConsole::IResult *pResult, void *pUserData);
 	static void ConTakeWeapon(IConsole::IResult *pResult, void *pUserData);
@@ -167,6 +168,10 @@ public:
 	};
 
 	CMute m_Mute;
+
+	int m_BotDifficulty;
+
+	void SendDifficulties(int ClientID);
 
 	// network
 	void SendChatTarget(int To, const char *pText);

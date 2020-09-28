@@ -6,6 +6,8 @@
 #include <engine/shared/config.h>
 #include <stdio.h>
 
+#include "bot.h"
+
 bool CGameContext::ShowCommand(int ClientID, CPlayer* pPlayer, const char* pMessage, int *pTeam)
 {
 	if(StrLeftComp(pMessage, "go") || StrLeftComp(pMessage, "stop") || StrLeftComp(pMessage, "restart"))
@@ -62,6 +64,17 @@ bool CGameContext::ShowCommand(int ClientID, CPlayer* pPlayer, const char* pMess
 			SendChatTarget(ClientID, "\"/stop\" Pause the game");
 			SendChatTarget(ClientID, "\"/go\" Start the game");
 			SendChatTarget(ClientID, "\"/restart\" Start a new round");
+		}
+
+		if(g_Config.m_SvBotsEnabled)
+		{
+			SendChatTarget(ClientID, "\"/difficulty [difficulty]\" Changes the difficulty or shows all difficulties if called without argument.");
+			SendChatTarget(ClientID, "\"/d [difficulty]\" Changes the difficulty or shows all difficulties if called without argument.");
+			SendChatTarget(ClientID, "\"/difficulties\" Show available difficulties");
+			SendChatTarget(ClientID, "\"/ds\" Show available difficulties");
+			if (g_Config.m_SvBotVsHuman) {
+				SendChatTarget(ClientID, "\"/switch\" Vote to switch sides");
+			}
 		}
 
 		if(g_Config.m_SvXonxFeature)
@@ -126,6 +139,9 @@ bool CGameContext::ShowCommand(int ClientID, CPlayer* pPlayer, const char* pMess
 	}
 	else if(StrLeftComp(pMessage, "switch"))
 	{
+		if (g_Config.m_SvBotsEnabled && !g_Config.m_SvBotVsHuman) {
+			return false;
+		}
 		if(CanStartVote(pPlayer))
 		{
 			char aDesc[VOTE_DESC_LENGTH] = "switch";
@@ -133,6 +149,54 @@ bool CGameContext::ShowCommand(int ClientID, CPlayer* pPlayer, const char* pMess
 
 			StartVoteAs(aDesc, aCmd, "", pPlayer);
 		}
+		return true;
+	}
+	else if(StrLeftComp(pMessage, "difficulties") || StrLeftComp(pMessage, "ds"))
+	{
+		if (!g_Config.m_SvBotsEnabled) {
+			return false;
+		}
+
+		SendDifficulties(ClientID);
+
+		return false;
+	}
+	else if(StrLeftComp(pMessage, "difficulty") || StrLeftComp(pMessage, "d"))
+	{
+		if (!g_Config.m_SvBotsEnabled) {
+			return false;
+		}
+
+		if(CanStartVote(pPlayer))
+		{
+			int Args;
+			int Difficulty;
+			if ((Args = sscanf(pMessage, "difficulty %d", &Difficulty)) >= 1
+			||  (Args = sscanf(pMessage, "d %d", &Difficulty)) >= 1)
+			{
+				if (ValidDifficulty(Difficulty)) {
+					char aBuf[64];
+					str_format(aBuf, sizeof(aBuf), "Change difficulty to \"%s\"", GetDifficultyName(Difficulty));
+					char bBuf[64];
+					str_format(bBuf, sizeof(bBuf), "difficulty %d", Difficulty);
+					StartVoteAs(aBuf, bBuf, "", pPlayer);
+				} else {
+					SendChatTarget(ClientID, "Invalid difficulty.");
+
+					SendDifficulties(ClientID);
+				}
+			} else {
+				if (str_comp_nocase(pMessage, "difficulty") || str_comp_nocase(pMessage, "d")) {
+					char bBuf[64];
+					str_format(bBuf, sizeof(bBuf), "Current Difficulty: %s", GetDifficultyName(m_BotDifficulty));
+					SendChatTarget(ClientID, bBuf);
+				} else {
+					SendChatTarget(ClientID, "Invalid difficulty. Difficulty should be a number.");
+					SendChatTarget(ClientID, "Usage: /difficulty [difficulty]");
+				}
+			}
+		}
+		return false;
 	}
 	else if(StrLeftComp(pMessage, "1on1") || StrLeftComp(pMessage, "2on2") || StrLeftComp(pMessage, "3on3") ||
 			StrLeftComp(pMessage, "4on4") || StrLeftComp(pMessage, "5on5") || StrLeftComp(pMessage, "6on6"))

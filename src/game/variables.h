@@ -85,6 +85,7 @@ MACRO_CONFIG_INT(SvVoteKickBantime, sv_vote_kick_bantime, 5, 0, 1440, CFGFLAG_SE
 
 //Server Bots
 MACRO_CONFIG_INT(SvBotsEnabled, sv_bots_enabled, 0, 0, 1, CFGFLAG_SERVER, "Enable bots")
+MACRO_CONFIG_INT(SvBotAccuracy, sv_bot_accuracy, 52, 0, 100, CFGFLAG_SERVER, "Bot Accuracy")
 MACRO_CONFIG_INT(SvBotSlots, sv_bot_slots, 2, 0, MAX_CLIENTS, CFGFLAG_SERVER, "Number of slots to reserve for bots")
 MACRO_CONFIG_INT(SvBotVsHuman, sv_bot_vs_human, 1, 0, 1, CFGFLAG_SERVER, "If bots only join the enemy team")
 MACRO_CONFIG_INT(SvBotSwitchTime, sv_bot_switch_time, 5, 0, 600, CFGFLAG_SERVER, "Time to switch sides")

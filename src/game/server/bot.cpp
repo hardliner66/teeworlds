@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include <game/generated/protocol.h>
 #include <game/gamecore.h>
 #include <engine/serverbrowser.h>
@@ -295,7 +297,13 @@ bool CBot::IsGrounded()
 
 void CBot::Tick()
 {
-	if(!m_pPlayer->GetCharacter())
+	if (m_IsDead && m_ManualRespawnTick < m_pGameServer->Server()->Tick())
+	{
+		m_InputData.m_Fire = true;
+	}
+
+	CCharacter *pCharacter = m_pPlayer->GetCharacter();
+	if(!pCharacter)
 		return;
 
 	if(m_pStrategyPosition == NULL)
@@ -304,7 +312,7 @@ void CBot::Tick()
 		m_pStrategyPosition->SetTeam(0);
 	}
 
-	const CCharacterCore *pMe = m_pPlayer->GetCharacter()->GetCore();
+	const CCharacterCore *pMe = pCharacter->GetCore();
 
 	UpdateTarget();
 
@@ -614,9 +622,10 @@ void CBot::HandleWeapon(bool SeeTarget)
 	else if(pMe->GetAmmoCount(WEAPON_GUN) != 10)
 		m_InputData.m_WantedWeapon = WEAPON_GUN+1;
 
+	const int accuracy = 360 - (360 / 100 * g_Config.m_SvBotAccuracy);
 
 	// Accuracy
-	float Angle = angle(m_Target) + (random_int()%64-32)*pi / 1024.0f;
+	float Angle = angle(m_Target) + (random_int()%accuracy-(accuracy/2))*pi / 1024.0f;
 	m_Target = direction(Angle)*length(m_Target);
 }
 

@@ -236,7 +236,7 @@ void IGameController::StartRound()
 
 			const int team = pPlayer->GetTeam();
 
-			if (g_Config.m_SvBotVsHuman && team != TEAM_SPECTATORS) {
+			if (g_Config.m_SvBotsEnabled && g_Config.m_SvBotVsHuman && team != TEAM_SPECTATORS) {
 				if (m_PlayerTeamRed) {
 					if (pPlayer->m_IsBot && team == TEAM_RED) {
 						pPlayer->SetTeam(TEAM_BLUE, false);
