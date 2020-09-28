@@ -1068,31 +1068,37 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 				const int team = pPlayer->GetTeam();
 				if(m_pController->CanChangeTeam(pPlayer, pMsg->m_Team))
 				{
-					bool do_switch = true;
 					if (g_Config.m_SvBotsEnabled && g_Config.m_SvBotVsHuman) {
-						do_switch = false;
-						if (m_pController->m_PlayerTeamRed && pMsg->m_Team == TEAM_RED) {
-							do_switch = true;
+						int players = 0;
+						for (int i = 0; i < MAX_CLIENTS ; i++) {
+							if (m_apPlayers[i] && !m_apPlayers[i]->m_IsBot && (m_apPlayers[i]->GetTeam() != TEAM_SPECTATORS)) {
+								players++;
+							}
 						}
-						if (!m_pController->m_PlayerTeamRed && pMsg->m_Team == TEAM_BLUE) {
-							do_switch = true;
+
+						if (pMsg->m_Team != TEAM_SPECTATORS) {
+							if (players <= 0) {
+								m_pController->m_PlayerTeamRed = !m_pController->m_PlayerTeamRed;
+							} else {
+								if (pMsg->m_Team == TEAM_RED) {
+									pMsg->m_Team = TEAM_BLUE;
+								}
+								if (pMsg->m_Team == TEAM_BLUE) {
+									pMsg->m_Team = TEAM_RED;
+								}
+								SendBroadcast("Cannot join bot team. Use /switch if you want to change sides.", ClientID);
+							}
 						}
 					}
 
-					if (pMsg->m_Team == TEAM_SPECTATORS) {
-						do_switch = true;
-					}
-
-					if (do_switch) {
-						pPlayer->m_LastSetTeam = Server()->Tick();
-						if(pPlayer->GetTeam() == TEAM_SPECTATORS || pMsg->m_Team == TEAM_SPECTATORS)
-							m_VoteUpdate = true;
-						pPlayer->SetTeam(pMsg->m_Team);
-						(void)m_pController->CheckTeamBalance();
-						pPlayer->m_TeamChangeTick = Server()->Tick();
-					}
+					pPlayer->m_LastSetTeam = Server()->Tick();
+					if(team == TEAM_SPECTATORS || pMsg->m_Team == TEAM_SPECTATORS)
+						m_VoteUpdate = true;
+					pPlayer->SetTeam(pMsg->m_Team);
+					(void)m_pController->CheckTeamBalance();
+					pPlayer->m_TeamChangeTick = Server()->Tick();
 				}
-				else if (pPlayer->GetTeam() != pMsg->m_Team) {
+				else if (team != pMsg->m_Team) {
 					if (g_Config.m_SvBotsEnabled && g_Config.m_SvBotVsHuman) {
 						char aDesc[VOTE_DESC_LENGTH] = "switch";
 						char aCmd[VOTE_CMD_LENGTH] = "switch";
@@ -1443,7 +1449,7 @@ void CGameContext::ConSwapTeams(IConsole::IResult *pResult, void *pUserData)
 {
 	CGameContext *pSelf = (CGameContext *)pUserData;
 	if (g_Config.m_SvBotsEnabled && g_Config.m_SvBotVsHuman) {
-		pSelf->SendChat(-1, CGameContext::CHAT_ALL, "Cannot swap in bot vs human mode. Use switch instead.");
+		pSelf->SendChat(-1, CGameContext::CHAT_ALL, "Cannot swap in bot vs human mode. Use /switch instead.");
 		return;
 	}
 
