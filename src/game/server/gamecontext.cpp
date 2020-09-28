@@ -660,7 +660,7 @@ void CGameContext::OnClientConnected(int ClientID)
 	// Check which team the player should be on
 	int StartTeam = g_Config.m_SvTournamentMode ? TEAM_SPECTATORS : m_pController->GetAutoTeam(ClientID);
 
-	if (g_Config.m_SvBotsEnabled && g_Config.m_SvBotVsHuman && StartTeam != TEAM_SPECTATORS) {
+	if (g_Config.m_SvBotsEnabled && g_Config.m_SvBotVsHuman && (StartTeam != TEAM_SPECTATORS)) {
 		if (m_pController->m_PlayerTeamRed) {
 			StartTeam = TEAM_RED;
 		} else {
@@ -1070,18 +1070,18 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 				const int team = pPlayer->GetTeam();
 				if(m_pController->CanChangeTeam(pPlayer, pMsg->m_Team))
 				{
-					bool do_switch = false;
+					bool do_switch = true;
 					if (g_Config.m_SvBotsEnabled && g_Config.m_SvBotVsHuman) {
+						do_switch = false;
 						if (m_pController->m_PlayerTeamRed && pMsg->m_Team == TEAM_RED) {
 							do_switch = true;
 						}
 						if (!m_pController->m_PlayerTeamRed && pMsg->m_Team == TEAM_BLUE) {
 							do_switch = true;
 						}
-						if (pMsg->m_Team == TEAM_SPECTATORS) {
-							do_switch = true;
-						}
-					} else {
+					}
+
+					if (pMsg->m_Team == TEAM_SPECTATORS) {
 						do_switch = true;
 					}
 
@@ -2374,7 +2374,7 @@ bool CGameContext::AddBot(int i, bool UseDropPlayer) {
 	TeamCount[0] = 0;
 	TeamCount[1] = 0;
 
-	if (g_Config.m_SvBotsEnabled && g_Config.m_SvBotVsHuman) {
+	if (g_Config.m_SvBotVsHuman) {
 		for(int i = 0; i < MAX_CLIENTS; i++) {
 			if (m_apPlayers[i] && !m_apPlayers[i]->IsBot()) {
 				const int team = m_apPlayers[i]->GetTeam();
