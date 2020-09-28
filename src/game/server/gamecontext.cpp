@@ -1069,15 +1069,16 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 				if(m_pController->CanChangeTeam(pPlayer, pMsg->m_Team))
 				{
 					if (g_Config.m_SvBotsEnabled && g_Config.m_SvBotVsHuman) {
-						int players = 0;
+						bool players_active = false;
 						for (int i = 0; i < MAX_CLIENTS ; i++) {
 							if (m_apPlayers[i] && !m_apPlayers[i]->m_IsBot && (m_apPlayers[i]->GetTeam() != TEAM_SPECTATORS)) {
-								players++;
+								players_active = true;
+								break;
 							}
 						}
 
 						if (pMsg->m_Team != TEAM_SPECTATORS) {
-							if (players <= 0) {
+							if (!players_active) {
 								m_pController->m_PlayerTeamRed = !m_pController->m_PlayerTeamRed;
 							} else {
 								if (pMsg->m_Team == TEAM_RED) {
