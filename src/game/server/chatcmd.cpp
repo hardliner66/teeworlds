@@ -68,8 +68,10 @@ bool CGameContext::ShowCommand(int ClientID, CPlayer* pPlayer, const char* pMess
 
 		if(g_Config.m_SvBotsEnabled)
 		{
-			SendChatTarget(ClientID, "\"/difficulty [difficulty]\" Changes the difficulty or shows all difficulties if called without argument.");
-			SendChatTarget(ClientID, "\"/d [difficulty]\" Changes the difficulty or shows all difficulties if called without argument.");
+			SendChatTarget(ClientID, "\"/difficulty\" Shows the current difficulty.");
+			SendChatTarget(ClientID, "\"/d\" Shows the current difficulty.");
+			// SendChatTarget(ClientID, "\"/difficulty [difficulty]\" Changes the difficulty or shows all difficulties if called without argument.");
+			// SendChatTarget(ClientID, "\"/d [difficulty]\" Changes the difficulty or shows all difficulties if called without argument.");
 			SendChatTarget(ClientID, "\"/difficulties\" Show available difficulties");
 			SendChatTarget(ClientID, "\"/ds\" Show available difficulties");
 			if (g_Config.m_SvBotVsHuman) {
@@ -167,35 +169,35 @@ bool CGameContext::ShowCommand(int ClientID, CPlayer* pPlayer, const char* pMess
 			return false;
 		}
 
-		if(CanStartVote(pPlayer))
-		{
-			int Args;
-			int Difficulty;
-			if ((Args = sscanf(pMessage, "difficulty %d", &Difficulty)) >= 1
-			||  (Args = sscanf(pMessage, "d %d", &Difficulty)) >= 1)
-			{
-				if (ValidDifficulty(Difficulty)) {
-					char aBuf[64];
-					str_format(aBuf, sizeof(aBuf), "Change difficulty to \"%s\"", GetDifficultyName(Difficulty));
-					char bBuf[64];
-					str_format(bBuf, sizeof(bBuf), "difficulty %d", Difficulty);
-					StartVoteAs(aBuf, bBuf, "", pPlayer);
-				} else {
-					SendChatTarget(ClientID, "Invalid difficulty.");
+		// if(CanStartVote(pPlayer))
+		// {
+		// 	int Args;
+		// 	int Difficulty;
+		// 	if ((Args = sscanf(pMessage, "difficulty %d", &Difficulty)) >= 1
+		// 	||  (Args = sscanf(pMessage, "d %d", &Difficulty)) >= 1)
+		// 	{
+		// 		if (ValidDifficulty(Difficulty)) {
+		// 			char aBuf[64];
+		// 			str_format(aBuf, sizeof(aBuf), "Change difficulty to \"%s\"", GetDifficultyName(Difficulty));
+		// 			char bBuf[64];
+		// 			str_format(bBuf, sizeof(bBuf), "difficulty %d", Difficulty);
+		// 			StartVoteAs(aBuf, bBuf, "", pPlayer);
+		// 		} else {
+		// 			SendChatTarget(ClientID, "Invalid difficulty.");
 
-					SendDifficulties(ClientID);
-				}
-			} else {
-				if (str_comp_nocase(pMessage, "difficulty") || str_comp_nocase(pMessage, "d")) {
+		// 			SendDifficulties(ClientID);
+		// 		}
+		// 	} else {
+				// if (str_comp_nocase(pMessage, "difficulty") || str_comp_nocase(pMessage, "d")) {
 					char bBuf[64];
 					str_format(bBuf, sizeof(bBuf), "Current Difficulty: %s", GetDifficultyName(m_BotDifficulty));
 					SendChatTarget(ClientID, bBuf);
-				} else {
-					SendChatTarget(ClientID, "Invalid difficulty. Difficulty should be a number.");
-					SendChatTarget(ClientID, "Usage: /difficulty [difficulty]");
-				}
-			}
-		}
+				// } else {
+				// 	SendChatTarget(ClientID, "Invalid difficulty. Difficulty should be a number.");
+				// 	SendChatTarget(ClientID, "Usage: /difficulty [difficulty]");
+				// }
+		// 	}
+		// }
 		return false;
 	}
 	else if(StrLeftComp(pMessage, "1on1") || StrLeftComp(pMessage, "2on2") || StrLeftComp(pMessage, "3on3") ||
