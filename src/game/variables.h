@@ -89,7 +89,7 @@ MACRO_CONFIG_INT(SvBotAccuracy, sv_bot_accuracy, 52, 0, 100, CFGFLAG_SERVER, "Bo
 MACRO_CONFIG_INT(SvBotReach, sv_bot_reach, 100, 0, 100, CFGFLAG_SERVER, "Bot Aim Distance in percent")
 MACRO_CONFIG_INT(SvBotHookReach, sv_bot_hook_reach, 100, 0, 100, CFGFLAG_SERVER, "Bot Hook Distance in percent")
 MACRO_CONFIG_INT(SvBotSlots, sv_bot_slots, 2, 0, MAX_CLIENTS, CFGFLAG_SERVER, "Number of slots to reserve for bots")
-MACRO_CONFIG_INT(SvBotVsHuman, sv_bot_vs_human, 1, 0, 1, CFGFLAG_SERVER, "If bots only join the enemy team")
+MACRO_CONFIG_INT(SvBotVsHuman, sv_bot_vs_human, 0, 0, 1, CFGFLAG_SERVER, "If bots only join the enemy team")
 MACRO_CONFIG_INT(SvBotSwitchTime, sv_bot_switch_time, 5, 0, 600, CFGFLAG_SERVER, "Time to switch sides")
 MACRO_CONFIG_STR(SvBotSkin, sv_bot_skin, 24, "default", CFGFLAG_SERVER, "Bot skin")
 MACRO_CONFIG_INT(SvBotAllowHook, sv_bot_allow_hook, 1, 0, 1, CFGFLAG_SERVER, "Bots are allowed to hook")

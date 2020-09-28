@@ -1081,6 +1081,8 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 						if (pMsg->m_Team == TEAM_SPECTATORS) {
 							do_switch = true;
 						}
+					} else {
+						do_switch = true;
 					}
 
 					if (do_switch) {
