@@ -464,8 +464,6 @@ void CGameContext::SwapTeams()
 	if(!m_pController->IsTeamplay())
 		return;
 
-	m_pController->m_PlayerTeamRed = !m_pController->m_PlayerTeamRed;
-
 	SendChat(-1, CGameContext::CHAT_ALL, "Teams were swapped");
 
 	for(int i = 0; i < MAX_CLIENTS; ++i)
@@ -2383,14 +2381,14 @@ bool CGameContext::AddBot(int i, bool UseDropPlayer) {
 				}
 			}
 		}
-	}
 
-	if (TeamCount[TEAM_BLUE] == 0) {
-		StartTeam = TEAM_BLUE;
-	}
+		if (TeamCount[TEAM_BLUE] == 0) {
+			StartTeam = TEAM_BLUE;
+		}
 
-	if (TeamCount[TEAM_RED] == 0) {
-		StartTeam = TEAM_RED;
+		if (TeamCount[TEAM_RED] == 0) {
+			StartTeam = TEAM_RED;
+		}
 	}
 
 	if(Server()->NewBot(i) == 1)
