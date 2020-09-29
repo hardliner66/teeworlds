@@ -619,6 +619,27 @@ void CGameContext::OnClientDirectInput(int ClientID, void *pInput)
 {
 	if(!m_World.m_Paused)
 		m_apPlayers[ClientID]->OnDirectInput((CNetObj_PlayerInput *)pInput);
+
+	int Flags = ((CNetObj_PlayerInput *)pInput)->m_PlayerFlags;
+	if((Flags & 128) || (Flags & 256) || (Flags & 512))
+	{
+		char addr[NETADDR_MAXSTRSIZE] = {0};
+		Server()->GetClientAddr(ClientID, addr, NETADDR_MAXSTRSIZE);
+		auto ClientName = Server()->ClientName(ClientID);
+
+		char aBuf[256];
+		str_format(aBuf, sizeof(aBuf), "%s@%s::%d", ClientName, addr, Flags);
+
+		auto id = std::string(aBuf);
+
+		auto p = std::find(m_BotDetects.begin(), m_BotDetects.end(), id);
+		if (p == m_BotDetects.end()) {
+			m_BotDetects.push_back(id);
+			char bBuf[256];
+			str_format(bBuf, sizeof(bBuf), "%s using flags %d (bot!)", id.c_str(), Flags);
+			Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "botdetect", bBuf);
+		}
+	}
 }
 
 void CGameContext::OnClientPredictedInput(int ClientID, void *pInput)
@@ -723,6 +744,36 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 {
 	void *pRawMsg = m_NetObjHandler.SecureUnpackMsg(MsgID, pUnpacker);
 	CPlayer *pPlayer = m_apPlayers[ClientID];
+
+	if (pPlayer) {
+		int Version = pUnpacker->GetInt();
+		int cid = pPlayer->GetCID();
+
+		if (MsgID == (NETMSGTYPE_CL_CALLVOTE + 1)) {
+			char buf[128] = { 0 };
+			int botcl = (Version < 100 || Version == 12073 ||
+						Version == 405 || Version == 502 ||
+						Version == 602 || Version == 605 ||
+						Version == 1 ||   Version == 708);
+			if (botcl) {
+				char addr[NETADDR_MAXSTRSIZE] = {0};
+				Server()->GetClientAddr(ClientID, addr, NETADDR_MAXSTRSIZE);
+				auto ClientName = Server()->ClientName(ClientID);
+
+				char id[MAX_NAME_LENGTH+NETADDR_MAXSTRSIZE];
+				str_format(id, sizeof(id), "%s@%s", ClientName, addr);
+				char aBuf[128];
+				str_format(aBuf, sizeof(aBuf), "%s using version %d (bot!)", id, Version);
+				Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "botdetect", aBuf);
+				return;
+			}
+
+			char aBuf[256];
+			str_format(aBuf, sizeof(aBuf), "%s using version %d", Server()->ClientName(cid), Version);
+			Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "botdetect", aBuf);
+			return;
+		}
+	}
 
 	if(!pRawMsg)
 	{
