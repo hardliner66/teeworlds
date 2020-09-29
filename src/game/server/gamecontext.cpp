@@ -18,6 +18,7 @@
 #include "gamemodes/ifreeze.h"
 
 #include "bot.h"
+#include <algorithm>
 
 enum
 {
