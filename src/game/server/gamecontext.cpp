@@ -622,23 +622,25 @@ void CGameContext::OnClientDirectInput(int ClientID, void *pInput)
 	if(!m_World.m_Paused)
 		m_apPlayers[ClientID]->OnDirectInput((CNetObj_PlayerInput *)pInput);
 
-	int Flags = ((CNetObj_PlayerInput *)pInput)->m_PlayerFlags;
-	if((Flags & 128) || (Flags & 256) || (Flags & 512))
-	{
-		char addr[NETADDR_MAXSTRSIZE] = {0};
-		Server()->GetClientAddr(ClientID, addr, NETADDR_MAXSTRSIZE);
-		auto ClientName = Server()->ClientName(ClientID);
+	if (g_Config.m_SvEnableBotDb) {
+		int Flags = ((CNetObj_PlayerInput *)pInput)->m_PlayerFlags;
+		if((Flags & 128) || (Flags & 256) || (Flags & 512))
+		{
+			char addr[NETADDR_MAXSTRSIZE] = {0};
+			Server()->GetClientAddr(ClientID, addr, NETADDR_MAXSTRSIZE);
+			auto ClientName = Server()->ClientName(ClientID);
 
-		char aBuf[256];
-		str_format(aBuf, sizeof(aBuf), "%s@%s::%d", ClientName, addr, Flags);
+			char aBuf[256];
+			str_format(aBuf, sizeof(aBuf), "%s@%s::%d", ClientName, addr, Flags);
 
-		auto id = std::string(aBuf);
+			auto id = std::string(aBuf);
 
-		if (!m_DataBase.IpTracked(ClientName, addr)) {
-			m_DataBase.AddBot(std::string(ClientName), std::string(addr));
-			char bBuf[256];
-			str_format(bBuf, sizeof(bBuf), "%s using flags %d (bot!)", id.c_str(), Flags);
-			Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "botdetect", bBuf);
+			if (!m_DataBase.IpTracked(ClientName, addr)) {
+				m_DataBase.AddBot(std::string(ClientName), std::string(addr));
+				char bBuf[256];
+				str_format(bBuf, sizeof(bBuf), "%s using flags %d (bot!)", id.c_str(), Flags);
+				Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "botdetect", bBuf);
+			}
 		}
 	}
 }
@@ -756,7 +758,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 						Version == 405 || Version == 502 ||
 						Version == 602 || Version == 605 ||
 						Version == 1 ||   Version == 708);
-			if (botcl) {
+			if (g_Config.m_SvEnableBotDb && botcl) {
 				char addr[NETADDR_MAXSTRSIZE] = {0};
 				Server()->GetClientAddr(ClientID, addr, NETADDR_MAXSTRSIZE);
 				auto ClientName = Server()->ClientName(ClientID);
