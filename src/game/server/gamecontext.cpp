@@ -30,6 +30,7 @@ void CGameContext::Construct(int Resetting)
 	m_Resetting = 0;
 	m_pServer = 0;
 
+
 	m_DataBase.Open("./bots.db");
 
 
@@ -2274,6 +2275,11 @@ void CGameContext::OnInit(/*class IKernel *pKernel*/)
 
 	m_Layers.Init(Kernel());
 	m_Collision.Init(&m_Layers);
+
+	char aBuf[256];
+	str_format(aBuf, sizeof(aBuf), "bots.%s.db", g_Config.m_SvName);
+
+	m_DataBase.Open(aBuf);
 
 	// reset everything here
 	//world = new GAMEWORLD;

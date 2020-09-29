@@ -61,6 +61,9 @@ static int user_version_callback(void* data, const int argc, char** argv, char**
 
 int CDatabase::Open(const std::string& path)
 {
+	if (m_db != nullptr) {
+		sqlite3_close(m_db);
+	}
 	auto res = sqlite3_open(path.c_str(), &m_db);
 
 	if (res) {

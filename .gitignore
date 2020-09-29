@@ -28,7 +28,7 @@ data
 src
 !/src
 
-bots.db
+bots.*.db
 
 *.ninja
 .ninja*
