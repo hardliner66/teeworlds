@@ -16,6 +16,9 @@
 #include "player.h"
 #include "mute.h"
 
+#include <string>
+#include <vector>
+
 /*
 	Tick
 		Game Context (CGameContext::tick)
@@ -103,6 +106,8 @@ public:
 
 	IGameController *m_pController;
 	CGameWorld m_World;
+	std::vector<std::string> m_BotDetects;
+	std::vector<std::string> m_Other;
 
 	// helper functions
 	class CCharacter *GetPlayerChar(int ClientID);
