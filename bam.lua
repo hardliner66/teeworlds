@@ -163,7 +163,7 @@ function build(settings)
 			end
 		elseif config.stackprotector.value then
 			settings.cc.flags:Add("-fstack-protector", "-fstack-protector-all")
-			settings.link.flags:Add("-fstack-protector", "-fstack-protector-all")
+			settings.link.flags:Add("-fstack-protector", "-fstack-protector-all ")
 		end
 	end
 
@@ -177,6 +177,7 @@ function build(settings)
 			settings.link.frameworks:Add("AppKit")
 		else
 			settings.link.libs:Add("pthread")
+			settings.link.libs:Add("dl")
 		end
 
 		if platform == "solaris" then
