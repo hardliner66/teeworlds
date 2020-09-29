@@ -1136,13 +1136,16 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 							if (!players_active) {
 								m_pController->m_PlayerTeamRed = !m_pController->m_PlayerTeamRed;
 							} else {
-								if (pMsg->m_Team == TEAM_RED) {
+								int old_team = pMsg->m_Team;
+								if (!m_pController->m_PlayerTeamRed && pMsg->m_Team == TEAM_RED) {
 									pMsg->m_Team = TEAM_BLUE;
 								}
-								if (pMsg->m_Team == TEAM_BLUE) {
+								if (m_pController->m_PlayerTeamRed && pMsg->m_Team == TEAM_BLUE) {
 									pMsg->m_Team = TEAM_RED;
 								}
-								SendBroadcast("Cannot join bot team. Use /switch if you want to change sides.", ClientID);
+								if (old_team != pMsg->m_Team) {
+									SendBroadcast("Cannot join bot team. Use /switch if you want to change sides.", ClientID);
+								}
 							}
 						}
 					}
