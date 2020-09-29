@@ -17,6 +17,8 @@
 #include "gamemodes/grenade.h"
 #include "gamemodes/ifreeze.h"
 
+#include <algorithm>
+
 enum
 {
 	RESET,
