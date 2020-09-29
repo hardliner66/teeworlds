@@ -28,6 +28,8 @@ data
 src
 !/src
 
+bots.db
+
 *.ninja
 .ninja*
 CMakeCache.txt
