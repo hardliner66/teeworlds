@@ -765,6 +765,12 @@ set_glob(GAME_SERVER GLOB_RECURSE src/game/server
   gamemodes/mod.h
   gamemodes/tdm.cpp
   gamemodes/tdm.h
+  database/database.cpp
+  database/database.h
+  database/sqlite/shell.c
+  database/sqlite/sqlite3.c
+  database/sqlite/sqlite3.h
+  database/sqlite/sqlite3ext.h
   gameworld.cpp
   gameworld.h
   player.cpp

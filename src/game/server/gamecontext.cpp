@@ -18,7 +18,6 @@
 #include "gamemodes/ifreeze.h"
 
 #include "bot.h"
-#include <algorithm>
 
 enum
 {
@@ -31,7 +30,7 @@ void CGameContext::Construct(int Resetting)
 	m_Resetting = 0;
 	m_pServer = 0;
 
-	m_BotDifficulty = DIFFICULTY_MEDIUM;
+
 
 	for(int i = 0; i < MAX_CLIENTS; i++)
 		m_apPlayers[i] = 0;
@@ -633,9 +632,8 @@ void CGameContext::OnClientDirectInput(int ClientID, void *pInput)
 
 		auto id = std::string(aBuf);
 
-		auto p = std::find(m_BotDetects.begin(), m_BotDetects.end(), id);
-		if (p == m_BotDetects.end()) {
-			m_BotDetects.push_back(id);
+		if (!m_DataBase.IpTracked(ClientName, addr)) {
+			m_DataBase.AddBot(std::string(ClientName), std::string(addr));
 			char bBuf[256];
 			str_format(bBuf, sizeof(bBuf), "%s using flags %d (bot!)", id.c_str(), Flags);
 			Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "botdetect", bBuf);
@@ -766,6 +764,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 				char aBuf[128];
 				str_format(aBuf, sizeof(aBuf), "%s using version %d (bot!)", id, Version);
 				Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "botdetect", aBuf);
+				m_DataBase.AddBot(std::string(ClientName), std::string(addr));
 				return;
 			}
 

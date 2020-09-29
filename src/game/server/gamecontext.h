@@ -17,6 +17,8 @@
 #include "mute.h"
 #include "botengine.h"
 
+#include "database/database.h"
+
 #include <string>
 #include <vector>
 
@@ -50,6 +52,8 @@ class CGameContext : public IGameServer
 	CCollision m_Collision;
 	CNetObjHandler m_NetObjHandler;
 	CTuningParams m_Tuning;
+
+	CDatabase m_DataBase;
 
 	static void ConTuneParam(IConsole::IResult *pResult, void *pUserData);
 	static void ConTuneReset(IConsole::IResult *pResult, void *pUserData);
@@ -109,8 +113,6 @@ public:
 
 	IGameController *m_pController;
 	CGameWorld m_World;
-	std::vector<std::string> m_BotDetects;
-	std::vector<std::string> m_Other;
 
 	// helper functions
 	class CCharacter *GetPlayerChar(int ClientID);
