@@ -30,6 +30,7 @@ void CGameContext::Construct(int Resetting)
 	m_Resetting = 0;
 	m_pServer = 0;
 
+	m_DataBase.Open("./bots.db");
 
 
 	for(int i = 0; i < MAX_CLIENTS; i++)
