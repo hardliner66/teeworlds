@@ -1134,7 +1134,10 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 
 						if (pMsg->m_Team != TEAM_SPECTATORS) {
 							if (!players_active) {
-								m_pController->m_PlayerTeamRed = !m_pController->m_PlayerTeamRed;
+								if ((m_pController->m_PlayerTeamRed && pMsg->m_Team == TEAM_BLUE)
+								|| (!m_pController->m_PlayerTeamRed && pMsg->m_Team == TEAM_RED)) {
+									m_pController->m_PlayerTeamRed = !m_pController->m_PlayerTeamRed;
+								}
 							} else {
 								int old_team = pMsg->m_Team;
 								if (!m_pController->m_PlayerTeamRed && pMsg->m_Team == TEAM_RED) {
@@ -2285,6 +2288,8 @@ void CGameContext::OnInit(/*class IKernel *pKernel*/)
 	str_format(aBuf, sizeof(aBuf), "bots.%s.db", g_Config.m_SvName);
 
 	m_DataBase.Open(aBuf);
+
+	m_BotDifficulty = g_Config.m_SvBotStartDifficulty;
 
 	// reset everything here
 	//world = new GAMEWORLD;

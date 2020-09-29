@@ -85,6 +85,7 @@ MACRO_CONFIG_INT(SvVoteKickBantime, sv_vote_kick_bantime, 5, 0, 1440, CFGFLAG_SE
 
 //Server Bots
 MACRO_CONFIG_INT(SvBotsEnabled, sv_bots_enabled, 0, 0, 1, CFGFLAG_SERVER, "Enable bots")
+MACRO_CONFIG_INT(SvBotStartDifficulty, sv_bot_start_difficulty, 3, -3, 99, CFGFLAG_SERVER, "Bot Start Difficulty")
 MACRO_CONFIG_INT(SvBotAccuracy, sv_bot_accuracy, 52, 0, 100, CFGFLAG_SERVER, "Bot Accuracy")
 MACRO_CONFIG_INT(SvBotReach, sv_bot_reach, 100, 0, 100, CFGFLAG_SERVER, "Bot Aim Distance in percent")
 MACRO_CONFIG_INT(SvBotHookReach, sv_bot_hook_reach, 100, 0, 100, CFGFLAG_SERVER, "Bot Hook Distance in percent")
