@@ -2288,7 +2288,7 @@ void CGameContext::OnInit(/*class IKernel *pKernel*/)
 		str_format(aBuf, sizeof(aBuf), "%s", g_Config.m_SvBotDbFile);
 	}
 
-	m_DataBase.Open(g_Config.m_SvBotDbFile);
+	m_DataBase.Open(aBuf);
 
 	m_BotDifficulty = g_Config.m_SvBotStartDifficulty;
 
