@@ -2284,6 +2284,13 @@ void CGameContext::OnInit(/*class IKernel *pKernel*/)
 	m_Layers.Init(Kernel());
 	m_Collision.Init(&m_Layers);
 
+	char aBuf[1024];
+	if (str_length(g_Config.m_SvBotDbFile) == 0) {
+		str_format(aBuf, sizeof(aBuf), "bots.%s.db", g_Config.m_SvPort);
+	} else {
+		str_format(aBuf, sizeof(aBuf), "%s", g_Config.m_SvBotDbFile);
+	}
+
 	m_DataBase.Open(g_Config.m_SvBotDbFile);
 
 	m_BotDifficulty = g_Config.m_SvBotStartDifficulty;
