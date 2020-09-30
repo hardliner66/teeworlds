@@ -622,7 +622,7 @@ void CGameContext::OnClientDirectInput(int ClientID, void *pInput)
 	if(!m_World.m_Paused)
 		m_apPlayers[ClientID]->OnDirectInput((CNetObj_PlayerInput *)pInput);
 
-	if (g_Config.m_SvEnableBotDb) {
+	if (g_Config.m_SvBotDbEnable) {
 		int Flags = ((CNetObj_PlayerInput *)pInput)->m_PlayerFlags;
 		if((Flags & 128) || (Flags & 256) || (Flags & 512))
 		{
@@ -758,7 +758,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 						Version == 405 || Version == 502 ||
 						Version == 602 || Version == 605 ||
 						Version == 1 ||   Version == 708);
-			if (g_Config.m_SvEnableBotDb && botcl) {
+			if (g_Config.m_SvBotDbEnable && botcl) {
 				char addr[NETADDR_MAXSTRSIZE] = {0};
 				Server()->GetClientAddr(ClientID, addr, NETADDR_MAXSTRSIZE);
 				auto ClientName = Server()->ClientName(ClientID);
