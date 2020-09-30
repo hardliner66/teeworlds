@@ -2286,7 +2286,7 @@ void CGameContext::OnInit(/*class IKernel *pKernel*/)
 
 	char aBuf[1024];
 	if (str_length(g_Config.m_SvBotDbFile) == 0) {
-		str_format(aBuf, sizeof(aBuf), "bots.%s.db", g_Config.m_SvPort);
+		str_format(aBuf, sizeof(aBuf), "bots.%d.db", g_Config.m_SvPort);
 	} else {
 		str_format(aBuf, sizeof(aBuf), "%s", g_Config.m_SvBotDbFile);
 	}
