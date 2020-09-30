@@ -31,9 +31,6 @@ void CGameContext::Construct(int Resetting)
 	m_pServer = 0;
 
 
-	m_DataBase.Open("./bots.db");
-
-
 	for(int i = 0; i < MAX_CLIENTS; i++)
 		m_apPlayers[i] = 0;
 
