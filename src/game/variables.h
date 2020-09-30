@@ -171,5 +171,6 @@ MACRO_CONFIG_INT(SvKillingspreeAwardLasers, sv_kspree_award_laser, 3, 1, 10, CFG
 MACRO_CONFIG_INT(SvKillingspreeAwardLasersSplit, sv_kspree_award_laser_split, 1, 1, 10, CFGFLAG_SERVER, "Split of the lasers while having the award")
 MACRO_CONFIG_INT(SvKillingspreeAwardFiredelay, sv_kspree_award_laser_firedelay, 100, 0, 800, CFGFLAG_SERVER, "Firedelay of the weapon when you got the award")
 
-MACRO_CONFIG_INT(SvEnableBotDb, sv_enable_bot_db, 0, 0, 1, CFGFLAG_SERVER, "Enables the bot.db")
+MACRO_CONFIG_INT(SvBotDbEnable, sv_bot_db_enable, 0, 0, 1, CFGFLAG_SERVER, "Enables the bot.db")
+MACRO_CONFIG_STR(SvBotDbFile, sv_bot_db_file, 1024, "bots.db", CFGFLAG_SERVER, "The name of the bot.db")
 #endif
