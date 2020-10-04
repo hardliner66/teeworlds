@@ -608,8 +608,8 @@ void CGameContext::OnClientDirectInput(int ClientID, void *pInput)
 
 			auto id = std::string(aBuf);
 
-			if (!m_DataBase.IpTracked(ClientName, addr)) {
-				m_DataBase.AddBot(std::string(ClientName), std::string(addr));
+			if (!m_DataBase.DetectionTracked(ClientName, addr, g_Config.m_SvName, g_Config.m_SvGametype, m_apPlayers[ClientID]->m_Version, Flags, false)) {
+				m_DataBase.AddBot(ClientName, addr, g_Config.m_SvName, g_Config.m_SvGametype, m_apPlayers[ClientID]->m_Version, Flags, false);
 				char bBuf[256];
 				str_format(bBuf, sizeof(bBuf), "%s using flags %d (bot!)", id.c_str(), Flags);
 				Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "botdetect", bBuf);
@@ -709,6 +709,8 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 		int Version = pUnpacker->GetInt();
 		int cid = pPlayer->GetCID();
 
+		pPlayer->m_Version = Version;
+
 		if (MsgID == (NETMSGTYPE_CL_CALLVOTE + 1)) {
 			char buf[128] = { 0 };
 			int botcl = (Version < 100 || Version == 12073 ||
@@ -725,7 +727,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 				char aBuf[128];
 				str_format(aBuf, sizeof(aBuf), "%s using version %d (bot!)", id, Version);
 				Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "botdetect", aBuf);
-				m_DataBase.AddBot(std::string(ClientName), std::string(addr));
+				m_DataBase.AddBot(ClientName, addr, g_Config.m_SvName, g_Config.m_SvGametype, Version, -1, false);
 				return;
 			}
 

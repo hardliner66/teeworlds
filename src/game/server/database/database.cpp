@@ -15,17 +15,26 @@ const char* CREATE_TABLE_BOTS = \
 "   PRIMARY KEY"
 ");";
 
-const char* TABLE_IP = "ip_addresses";
-const char* COL_I_NAME = "username";
-const char* COL_I_IP = "ip";
+const char* TABLE_DETECTIONS = "detections";
+const char* COL_D_NAME = "username";
+const char* COL_D_IP = "ip";
+const char* COL_D_VERSION = "version";
+const char* COL_D_FLAGS = "flags";
+const char* COL_D_SERVER = "server_name";
+const char* COL_D_GAMEMODE = "gamemode";
+const char* COL_D_VS_BOTS = "vs_bots";
 
-const char* CREATE_TABLE_IP = \
-"CREATE TABLE ip_addresses ("
-"   id    INTEGER PRIMARY KEY AUTOINCREMENT"
-"   NOT NULL,"
+const char* CREATE_TABLE_DETECTIONS = \
+"CREATE TABLE detections ("
+"   id       INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,"
 "   username TEXT REFERENCES bots (username)"
 "                               NOT NULL,"
-"   ip      TEXT NOT NULL"
+"   version      INTEGER NOT NULL,"
+"   flags      INTEGER NOT NULL,"
+"   ip      TEXT NOT NULL,"
+"   server_name TEXT NOT NULL,"
+"   gamemode TEXT NOT NULL,"
+"   vs_bots BOOLEAN NOT NULL"
 ");";
 // ReSharper restore CppInconsistentNaming
 
@@ -80,8 +89,8 @@ int CDatabase::Open(const std::string& path)
 	{
 		sqlite3_exec(m_db, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
 
-		res += execute_and_print(m_db, CREATE_TABLE_BOTS, nullptr, nullptr, "Create table players");
-		res += execute_and_print(m_db, CREATE_TABLE_IP, nullptr, nullptr, "Create table players");
+		res += execute_and_print(m_db, CREATE_TABLE_BOTS, nullptr, nullptr, "Create table bots");
+		res += execute_and_print(m_db, CREATE_TABLE_DETECTIONS, nullptr, nullptr, "Create table detections");
 
 		if (res) {
 			#ifdef DB_LOGGING
@@ -89,9 +98,34 @@ int CDatabase::Open(const std::string& path)
 			#endif
 			return res;
 		}
-		execute_and_print(m_db, "PRAGMA user_version = 1;", user_version_callback, this, "Set User Version to 1");
+		execute_and_print(m_db, "PRAGMA user_version = 2;", user_version_callback, this, "Set User Version to 2");
 
 		res = sqlite3_exec(m_db, "END TRANSACTION;", nullptr, nullptr, nullptr);
+
+		if (res != SQLITE_OK) {
+			user_version = 2;
+		}
+	}
+
+	if (user_version == 1)
+	{
+		sqlite3_exec(m_db, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+
+		res += execute_and_print(m_db, CREATE_TABLE_DETECTIONS, nullptr, nullptr, "Create table detections");
+
+		if (res) {
+			#ifdef DB_LOGGING
+			std::cerr << "Error open DB " << sqlite3_errmsg(m_db) << std::endl;
+			#endif
+			return res;
+		}
+		execute_and_print(m_db, "PRAGMA user_version = 2;", user_version_callback, this, "Set User Version to 2");
+
+		res = sqlite3_exec(m_db, "END TRANSACTION;", nullptr, nullptr, nullptr);
+
+		if (res != SQLITE_OK) {
+			user_version = 2;
+		}
 	}
 
 	return res;
@@ -121,11 +155,35 @@ bool CDatabase::IsBot(const std::string& username)
 	return false;
 }
 
-bool CDatabase::IpTracked(const std::string& username, const std::string& ip) {
+bool CDatabase::DetectionTracked(
+	const std::string& username,
+	const std::string& ip,
+	const std::string& server_name,
+	const std::string& gamemode,
+	const int version,
+	const int flags,
+	const bool vs_bots)
+{
 	sqlite3_stmt* stmt = nullptr;
 	const auto res = sqlite3_prepare_v2(
 		m_db,
-		sqlite3_mprintf("SELECT * FROM %s where %s == %Q and %s == %Q;", TABLE_IP, COL_I_NAME, username.c_str(), COL_I_IP, ip.c_str()),
+		sqlite3_mprintf("SELECT * FROM %s where %s == %Q and %s == %Q  and %s == %Q  and %s == %Q  and %s == %d  and %s == %d  and %s == %d;",
+			TABLE_DETECTIONS,
+			COL_D_NAME,
+			username.c_str(),
+			COL_D_IP,
+			ip.c_str(),
+			COL_D_SERVER,
+			server_name.c_str(),
+			COL_D_GAMEMODE,
+			gamemode.c_str(),
+			COL_D_VERSION,
+			version,
+			COL_D_FLAGS,
+			flags,
+			COL_D_VS_BOTS,
+			vs_bots
+		),
 		-1,
 		&stmt,
 		nullptr);
@@ -144,7 +202,7 @@ bool CDatabase::IpTracked(const std::string& username, const std::string& ip) {
 	return false;
 }
 
-void CDatabase::AddBot(const std::string& username, const std::string& ip)
+void CDatabase::AddBot(const std::string& username, const std::string& ip, const std::string& server_name, const std::string& gamemode, const int version, const int flags, const bool vs_bots)
 {
 	if (!IsBot(username)) {
 		bool success = execute_and_print(
@@ -155,10 +213,27 @@ void CDatabase::AddBot(const std::string& username, const std::string& ip)
 			"insert bot"
 		) == SQLITE_OK;
 	}
-	if (!IpTracked(username, ip)) {
+	if (!DetectionTracked(username, ip, server_name, gamemode, version, flags, vs_bots)) {
 		bool success = execute_and_print(
 			m_db,
-			sqlite3_mprintf("INSERT INTO %s(%s, %s) VALUES(%Q, %Q);", TABLE_IP, COL_I_NAME, COL_I_IP, username.c_str(), ip.c_str()),
+			sqlite3_mprintf(
+				"INSERT INTO %s(%s, %s, %s, %s, %s, %s, %s) VALUES(%Q, %Q, %Q, %Q, %d, %d, %d);",
+				TABLE_DETECTIONS,
+				COL_D_NAME,
+				COL_D_IP,
+				COL_D_SERVER,
+				COL_D_GAMEMODE,
+				COL_D_VERSION,
+				COL_D_FLAGS,
+				COL_D_VS_BOTS,
+				username.c_str(),
+				ip.c_str(),
+				server_name.c_str(),
+				gamemode.c_str(),
+				version,
+				flags,
+				vs_bots
+			),
 			nullptr,
 			nullptr,
 			"insert ip"
