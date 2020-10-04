@@ -53,6 +53,8 @@ public:
 
 	bool m_IsReady;
 
+	int m_Version;
+
 	//
 	int m_Vote;
 	int m_VotePos;
