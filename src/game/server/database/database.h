@@ -17,9 +17,9 @@ public:
 	}
 
 	int Open(const std::string& path);
-	void AddBot(const std::string& username, const std::string& ip, const std::string& server_name, const std::string& gamemode, const int version, const int flags, const bool vs_bots);
+	void AddBot(const std::string& username, const std::string& ip, const std::string& servername, const std::string& gamemode, const int version, const int flags, const bool vs_bots);
 	bool IsBot(const std::string& username);
-	bool DetectionTracked(const std::string& username, const std::string& ip, const std::string& server_name, const std::string& gamemode, const int version, const int flags, const bool vs_bots);
+	bool DetectionTracked(const std::string& username, const std::string& ip, const std::string& servername, const std::string& gamemode, const int version, const int flags, const bool vs_bots);
 
 	int user_version = 0;
 

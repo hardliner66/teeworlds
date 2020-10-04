@@ -20,7 +20,7 @@ const char* COL_D_NAME = "username";
 const char* COL_D_IP = "ip";
 const char* COL_D_VERSION = "version";
 const char* COL_D_FLAGS = "flags";
-const char* COL_D_SERVER = "server_name";
+const char* COL_D_SERVER = "servername";
 const char* COL_D_GAMEMODE = "gamemode";
 const char* COL_D_VS_BOTS = "vs_bots";
 
@@ -32,7 +32,7 @@ const char* CREATE_TABLE_DETECTIONS = \
 "   version      INTEGER NOT NULL,"
 "   flags      INTEGER NOT NULL,"
 "   ip      TEXT NOT NULL,"
-"   server_name TEXT NOT NULL,"
+"   servername TEXT NOT NULL,"
 "   gamemode TEXT NOT NULL,"
 "   vs_bots BOOLEAN NOT NULL"
 ");";
@@ -158,7 +158,7 @@ bool CDatabase::IsBot(const std::string& username)
 bool CDatabase::DetectionTracked(
 	const std::string& username,
 	const std::string& ip,
-	const std::string& server_name,
+	const std::string& servername,
 	const std::string& gamemode,
 	const int version,
 	const int flags,
@@ -174,7 +174,7 @@ bool CDatabase::DetectionTracked(
 			COL_D_IP,
 			ip.c_str(),
 			COL_D_SERVER,
-			server_name.c_str(),
+			servername.c_str(),
 			COL_D_GAMEMODE,
 			gamemode.c_str(),
 			COL_D_VERSION,
@@ -202,7 +202,7 @@ bool CDatabase::DetectionTracked(
 	return false;
 }
 
-void CDatabase::AddBot(const std::string& username, const std::string& ip, const std::string& server_name, const std::string& gamemode, const int version, const int flags, const bool vs_bots)
+void CDatabase::AddBot(const std::string& username, const std::string& ip, const std::string& servername, const std::string& gamemode, const int version, const int flags, const bool vs_bots)
 {
 	if (!IsBot(username)) {
 		bool success = execute_and_print(
@@ -213,7 +213,7 @@ void CDatabase::AddBot(const std::string& username, const std::string& ip, const
 			"insert bot"
 		) == SQLITE_OK;
 	}
-	if (!DetectionTracked(username, ip, server_name, gamemode, version, flags, vs_bots)) {
+	if (!DetectionTracked(username, ip, servername, gamemode, version, flags, vs_bots)) {
 		bool success = execute_and_print(
 			m_db,
 			sqlite3_mprintf(
@@ -228,7 +228,7 @@ void CDatabase::AddBot(const std::string& username, const std::string& ip, const
 				COL_D_VS_BOTS,
 				username.c_str(),
 				ip.c_str(),
-				server_name.c_str(),
+				servername.c_str(),
 				gamemode.c_str(),
 				version,
 				flags,
