@@ -22,7 +22,7 @@ CPlayer::CPlayer(CGameContext *pGameServer, int ClientID, int Team)
 	m_LastActionTick = Server()->Tick();
 	m_TeamChangeTick = Server()->Tick();
 
-	m_Version = -1;
+	m_Version = 0;
 
 	m_ChatTicks = 0;
 	m_OldChatMsgCount = 0;
