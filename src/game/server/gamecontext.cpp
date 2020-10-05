@@ -727,7 +727,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 				char aBuf[128];
 				str_format(aBuf, sizeof(aBuf), "%s using version %d (bot!)", id, Version);
 				Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "botdetect", aBuf);
-				m_DataBase.AddBot(ClientName, addr, g_Config.m_SvName, g_Config.m_SvGametype, Version, -1, false);
+				m_DataBase.AddBot(ClientName, addr, g_Config.m_SvName, g_Config.m_SvGametype, Version, 0, false);
 				return;
 			}
 
