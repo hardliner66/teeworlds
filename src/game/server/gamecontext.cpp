@@ -604,7 +604,7 @@ void CGameContext::OnClientDirectInput(int ClientID, void *pInput)
 			auto ClientName = Server()->ClientName(ClientID);
 
 			char aBuf[256];
-			str_format(aBuf, sizeof(aBuf), "%s@%s::%d", ClientName, addr, Flags);
+			str_format(aBuf, sizeof(aBuf), "%s@%s", ClientName, addr);
 
 			auto id = std::string(aBuf);
 
@@ -712,7 +712,6 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 		pPlayer->m_Version = Version;
 
 		if (MsgID == (NETMSGTYPE_CL_CALLVOTE + 1)) {
-			char buf[128] = { 0 };
 			int botcl = (Version < 100 || Version == 12073 ||
 						Version == 405 || Version == 502 ||
 						Version == 602 || Version == 605 ||
