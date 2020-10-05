@@ -607,9 +607,10 @@ void CGameContext::OnClientDirectInput(int ClientID, void *pInput)
 			str_format(aBuf, sizeof(aBuf), "%s@%s", ClientName, addr);
 
 			auto id = std::string(aBuf);
+			auto clan = std::string(Server()->ClientClan(ClientID));
 
-			if (!m_DataBase.DetectionTracked(ClientName, addr, g_Config.m_SvName, g_Config.m_SvGametype, m_apPlayers[ClientID]->m_Version, Flags, false)) {
-				m_DataBase.AddBot(ClientName, addr, g_Config.m_SvName, g_Config.m_SvGametype, m_apPlayers[ClientID]->m_Version, Flags, false);
+			if (!m_DataBase.DetectionTracked(ClientName, clan, addr, g_Config.m_SvName, g_Config.m_SvGametype, m_apPlayers[ClientID]->m_Version, Flags, false)) {
+				m_DataBase.AddBot(ClientName, clan, addr, g_Config.m_SvName, g_Config.m_SvGametype, m_apPlayers[ClientID]->m_Version, Flags, false);
 				char bBuf[256];
 				str_format(bBuf, sizeof(bBuf), "%s using flags %d (bot!)", id.c_str(), Flags);
 				Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "botdetect", bBuf);
@@ -726,7 +727,7 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 				char aBuf[128];
 				str_format(aBuf, sizeof(aBuf), "%s using version %d (bot!)", id, Version);
 				Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "botdetect", aBuf);
-				m_DataBase.AddBot(ClientName, addr, g_Config.m_SvName, g_Config.m_SvGametype, Version, 0, false);
+				m_DataBase.AddBot(ClientName, std::string(Server()->ClientClan(ClientID)), addr, g_Config.m_SvName, g_Config.m_SvGametype, Version, 0, false);
 				return;
 			}
 
