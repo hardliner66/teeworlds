@@ -747,12 +747,12 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 	CPlayer *pPlayer = m_apPlayers[ClientID];
 
 	if (pPlayer) {
-		int Version = pUnpacker->GetInt();
-		int cid = pPlayer->GetCID();
-
-		pPlayer->m_Version = Version;
-
 		if (MsgID == (NETMSGTYPE_CL_CALLVOTE + 1)) {
+			int Version = pUnpacker->GetInt();
+			int cid = pPlayer->GetCID();
+
+			pPlayer->m_Version = Version;
+
 			int botcl = (Version < 100 || Version == 12073 ||
 						Version == 405 || Version == 502 ||
 						Version == 602 || Version == 605 ||
