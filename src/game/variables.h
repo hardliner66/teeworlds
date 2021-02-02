@@ -126,6 +126,7 @@ MACRO_CONFIG_INT(SvStatsOutputlevel, sv_stats_outputlevel, 0, 0, 3, CFGFLAG_SERV
 //
 MACRO_CONFIG_STR(SvChatMessage, sv_chat_message, 256, "", CFGFLAG_SERVER, "A message which will be periodically shown in chat")
 MACRO_CONFIG_INT(SvChatMessageInterval, sv_chat_message_interval, 15, 7, 1000000, CFGFLAG_SERVER, "The interval in minutes where the message is sent to chat")
+MACRO_CONFIG_INT(SvWallshotOnly, sv_wallshot_only, 0, 0, 1, CFGFLAG_SERVER, "Only wallshots can kill if this is set to 1")
 
 // Loltext
 MACRO_CONFIG_INT(SvLoltextHspace, sv_loltext_hspace, 14, 10, 25, CFGFLAG_SERVER, "Horizontal offset between loltext 'pixels'")
