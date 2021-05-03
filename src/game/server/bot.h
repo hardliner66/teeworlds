@@ -193,6 +193,11 @@ protected:
 	CNetObj_PlayerInput m_InputData;
 	CNetObj_PlayerInput m_LastData;
 
+	bool preFireLock;
+	float preFireAngle;
+	int preTime;
+	int preFireTimer;
+	
 	int m_Move;
 	vec2 m_Direction;
 	int m_Jump;
@@ -209,6 +214,7 @@ protected:
 	bool FindPickup(int Type, vec2 *pPos, float Radius = 1000);
 
 	void HandleWeapon(bool SeeTarget);
+	void ShootWeapon();
 	void HandleHook(bool SeeTarget);
 	void UpdateEdge();
 	void MakeChoice(bool UseTarget);

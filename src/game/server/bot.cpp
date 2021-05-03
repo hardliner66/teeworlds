@@ -341,8 +341,18 @@ void CBot::Tick()
 
 	m_RealTarget = m_Target + Pos;
 
-	if(g_Config.m_SvBotAllowFire && m_pPlayer->GetCharacter()->CanFire())
-		HandleWeapon(InSight);
+	if(g_Config.m_SvBotAllowFire && m_pPlayer->GetCharacter()->botPreFire(preTime))
+	{
+		if(!preFireLock) 
+		{
+			HandleWeapon(InSight);
+		}else if(preFireTimer <= 0 && preFireLock)
+		{
+			preFireLock = false;
+			ShootWeapon();
+		}
+		preFireTimer--;
+	}
 
 	if(g_Config.m_SvBotAllowMove && g_Config.m_SvBotAllowHook)
 		HandleHook(InSight);
@@ -509,7 +519,9 @@ void CBot::HandleWeapon(bool SeeTarget)
 	{
 		float ClosestRange = distance(Pos, apTarget[c]->m_Pos);
 		float Close = 65.0f;
-		Target = apTarget[c]->m_Pos - Pos;
+		vec2 bVel = pMe->GetCore()->m_Vel / GameServer()->Server()->TickSpeed();
+		vec2 tVel = apTarget[c]->m_Vel / GameServer()->Server()->TickSpeed();
+		Target = (apTarget[c]->m_Pos + tVel * preTime) - (Pos + bVel * preTime);
 		if(ClosestRange < Close)
 		{
 			Weapon = WEAPON_HAMMER;
@@ -613,10 +625,11 @@ void CBot::HandleWeapon(bool SeeTarget)
 	}
 	if(Weapon > -1)
 	{
+		//this if statement means that the bot will actually shoot
+		//setting delayed reaction speed & lock
+		preFireLock= true;
+		preFireTimer = preTime;
 		m_InputData.m_WantedWeapon = Weapon+1;
-		m_InputData.m_Fire = m_LastData.m_Fire^1;
-		if(m_InputData.m_Fire)
-			m_Target = Target;
 	}
 	else if(pMe->GetAmmoCount(WEAPON_GUN) != 10)
 		m_InputData.m_WantedWeapon = WEAPON_GUN+1;
@@ -624,8 +637,13 @@ void CBot::HandleWeapon(bool SeeTarget)
 	const int accuracy = 360 - (360 / 100 * g_Config.m_SvBotAccuracy);
 
 	// Accuracy
-	float Angle = angle(m_Target) + (random_int()%accuracy-(accuracy/2))*pi / 1024.0f;
-	m_Target = direction(Angle)*length(m_Target);
+	preFireAngle = angle(Target) + (random_int()%accuracy-(accuracy/2))*pi / 1024.0f;
+}
+
+void CBot::ShootWeapon()
+{
+	m_Target = direction(preFireAngle)*length(m_Target);
+	m_InputData.m_Fire = m_LastData.m_Fire^1;
 }
 
 void CBot::UpdateEdge()
