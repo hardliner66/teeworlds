@@ -352,6 +352,8 @@ void CBot::Tick()
 			ShootWeapon();
 		}
 		preFireTimer--;
+		if(preFireTimer < 0)
+			preFireLock = false;
 	}
 
 	if(g_Config.m_SvBotAllowMove && g_Config.m_SvBotAllowHook)
