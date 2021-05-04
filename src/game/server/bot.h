@@ -195,7 +195,6 @@ protected:
 
 	bool preFireLock;
 	float preFireAngle;
-	int preTime;
 	int preFireTimer;
 	
 	int m_Move;
