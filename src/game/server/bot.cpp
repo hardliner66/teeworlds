@@ -529,7 +529,6 @@ void CBot::HandleWeapon(bool SeeTarget)
 		Collision()->FastIntersectLine(bPos, bPos+bVel*g_Config.m_SvBotDelay, 0, &bPos);
 		Collision()->FastIntersectLine(tPos, tPos+tVel*g_Config.m_SvBotDelay, 0, &tPos);
 		Target = tPos - bPos;
-		//Target = apTarget[c]->m_Pos - Pos;
 		if(ClosestRange < Close)
 		{
 			Weapon = WEAPON_HAMMER;
