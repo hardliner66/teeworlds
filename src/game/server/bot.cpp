@@ -341,7 +341,7 @@ void CBot::Tick()
 
 	m_RealTarget = m_Target + Pos;
 
-	if(g_Config.m_SvBotAllowFire && m_pPlayer->GetCharacter()->botPreFire(g_Config.m_SvBotDelay))
+	if(g_Config.m_SvBotAllowFire && m_pPlayer->GetCharacter()->PreCanFire(g_Config.m_SvBotDelay))
 	{
 		if(!preFireLock) 
 		{
