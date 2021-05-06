@@ -127,30 +127,24 @@ _Note: The letters behind a command determines what kind of argument and how man
 ## Chat-Commands
 _Note: Alternatives are seperated by a comma. For `go`, `stop` and `restart` it's not necessary to type a leading slash._
 
-| Command            | Usage                                        | Description                                                                                              |
-|--------------------|----------------------------------------------|----------------------------------------------------------------------------------------------------------|
-| /info              | /info                                        | Show information about this mod                                                                          |
-| /credits           | /credits                                     | Show some credits...                                                                                     |
-| /stats             | /stats &lt;Playername&gt;                    | Shows statistics of any player. You dont need to write your own name for your own statistics             |
-| /sayto , /st , /pm | /sayto &lt;Name/ID&gt; &lt;Message&gt;       | Send a private message to a player in the server                                                         |
-| /ans , /r          | /ans &lt;Message&gt;                         | Answer to a private message. The receiver is the player from where the last message was received or sent |
-| /emote             | /emote &lt;Emotename&gt; &lt;Time in sec&gt; | Set an emote. Available are `surprise`, `blink`, `happy`, `pain`, `angry` and `normal`                   |
-| /stop              | /stop                                        | Pause the game                                                                                           |
-| /go                | /go                                          | Resume the game                                                                                          |
-| /restart           | /restart                                     | Restart the game                                                                                         |
-| /1on1 - /6on6      | /1on1                                        | Start a war and set spectator slots                                                                      |
-| /reset             | /reset                                       | Reset spectator slots which may have been set by `\1on1` - `\6on6`                                       |
+| Command                        | Usage                                        | Description                                                                                              |
+|--------------------------------|----------------------------------------------|----------------------------------------------------------------------------------------------------------|
+| /info                          | /info                                        | Show information about this mod                                                                          |
+| /credits                       | /credits                                     | Show some credits...                                                                                     |
+| /stats                         | /stats &lt;Playername&gt;                    | Shows statistics of any player. You dont need to write your own name for your own statistics             |
+| /sayto, /st, /pm, /whisper, /w | /sayto &lt;Name/ID&gt; &lt;Message&gt;       | Send a private message to a player in the server                                                         |
+| /ans , /r                      | /ans &lt;Message&gt;                         | Answer to a private message. The receiver is the player from where the last message was received or sent |
+| /emote                         | /emote &lt;Emotename&gt; &lt;Time in sec&gt; | Set an emote. Available are `surprise`, `blink`, `happy`, `pain`, `angry` and `normal`                   |
+| /stop                          | /stop                                        | Pause the game                                                                                           |
+| /go                            | /go                                          | Resume the game                                                                                          |
+| /restart                       | /restart                                     | Restart the game                                                                                         |
+| /1on1 - /6on6                  | /1on1                                        | Start a war and set spectator slots                                                                      |
+| /reset                         | /reset                                       | Reset spectator slots which may have been set by `\1on1` - `\6on6`                                       |
 
 For other server settings please see the official [Teeworlds documentation](https://www.teeworlds.com/?page=docs&wiki=docs_overview)
 
 ---
 
-#### Current Version: 0.7.5
-
-#### [Download](https://github.com/Teetime/teeworlds/releases)
-
----
-
 **Example Configs:**
-- [iCTF\+](https://github.com/Teetime/teeworlds/blob/tw-plus/sample-ictf.cfg)
-- [iFreeze\+](https://github.com/Teetime/teeworlds/blob/tw-plus/sample-ifreeze.cfg)
+- [iCTF\+](https://github.com/hardliner66/teeworlds/blob/itrain/sample-ictf.cfg)
+- [iFreeze\+](https://github.com/hardliner66/teeworlds/blob/itrain/sample-ifreeze.cfg)
