@@ -95,6 +95,7 @@ MACRO_CONFIG_INT(SvBotVsHuman, sv_bot_vs_human, 1, 0, 1, CFGFLAG_SERVER, "If bot
 MACRO_CONFIG_INT(SvBotSwitchTime, sv_bot_switch_time, 5, 0, 600, CFGFLAG_SERVER, "Time to switch sides")
 MACRO_CONFIG_STR(SvBotSkin, sv_bot_skin, 24, "default", CFGFLAG_SERVER, "Bot skin")
 MACRO_CONFIG_INT(SvBotAllowHook, sv_bot_allow_hook, 1, 0, 1, CFGFLAG_SERVER, "Bots are allowed to hook")
+MACRO_CONFIG_INT(SvBotAllowPlayerHook, sv_bot_allow_player_hook, 1, 0, 1, CFGFLAG_SERVER, "Bots are allowed to hook player")
 MACRO_CONFIG_INT(SvBotAllowMove, sv_bot_allow_move, 1, 0, 1, CFGFLAG_SERVER, "Bots are allowed to move")
 MACRO_CONFIG_INT(SvBotAllowFire, sv_bot_allow_fire, 1, 0, 1, CFGFLAG_SERVER, "Bots fire")
 MACRO_CONFIG_INT(SvBotDrawTarget, sv_bot_draw_target, 0, 0, 1, CFGFLAG_SERVER, "Show bot target")

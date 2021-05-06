@@ -347,18 +347,19 @@ void CBot::Tick()
 		{
 			HandleWeapon(InSight);
 		}
-		if(preFireTimer <= 0 && preFireLock)
+		else if(preFireTimer)
+		{
+			preFireTimer--;
+		}
+		else
 		{
 			preFireLock = false;
 			ShootWeapon();
 		}
-		preFireTimer--;
-		if(preFireTimer < 0)
-			preFireLock = false;
 	}
 
 	if(g_Config.m_SvBotAllowMove && g_Config.m_SvBotAllowHook)
-		HandleHook(InSight);
+		HandleHook(InSight && g_Config.m_SvBotAllowPlayerHook);
 
 	if(m_Flags & BFLAG_LEFT)
 			m_InputData.m_Direction = -1;
