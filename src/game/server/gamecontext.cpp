@@ -1923,18 +1923,16 @@ void CGameContext::ConSwitch(IConsole::IResult *pResult, void *pUserData) {
 	pSelf->SendChat(-1, CHAT_ALL, aBuf);
 }
 
-void CGameContext::ConSetDifficulty(IConsole::IResult *pResult, void *pUserData) {
+void CGameContext::UpdateBotDifficulty(int difficulty) {
 	if (!g_Config.m_SvBotsEnabled) {
 		return;
 	}
-	CGameContext *pSelf = (CGameContext *)pUserData;
-	int difficulty = pResult->GetInteger(0);
 
 	if (!ValidDifficulty(difficulty)) {
 		return;
 	}
 
-	pSelf->m_BotDifficulty = difficulty;
+	m_BotDifficulty = difficulty;
 
 	switch (difficulty) {
 		case DIFFICULTY_PEACEFUL_STATIONARY: {
@@ -2038,6 +2036,13 @@ void CGameContext::ConSetDifficulty(IConsole::IResult *pResult, void *pUserData)
 			g_Config.m_SvBotDelay = 0;
 		}break;
 	}
+}
+
+void CGameContext::ConSetDifficulty(IConsole::IResult *pResult, void *pUserData) {
+	CGameContext *pSelf = (CGameContext *)pUserData;
+	int difficulty = pResult->GetInteger(0);
+
+	pSelf->UpdateBotDifficulty(difficulty);
 }
 
 void CGameContext::ConMuteSpec(IConsole::IResult *pResult, void *pUserData)
@@ -2312,7 +2317,7 @@ void CGameContext::OnInit(/*class IKernel *pKernel*/)
 
 	m_DataBase.Open(aBuf);
 
-	m_BotDifficulty = g_Config.m_SvBotStartDifficulty;
+	UpdateBotDifficulty(g_Config.m_SvBotStartDifficulty);
 
 	// reset everything here
 	//world = new GAMEWORLD;

@@ -93,6 +93,8 @@ class CGameContext : public IGameServer
 	static void ConTeleport(IConsole::IResult *pResult, void *pUserData);
 #endif
 
+	void UpdateBotDifficulty(int difficulty);
+
 	CGameContext(int Resetting);
 	void Construct(int Resetting);
 
