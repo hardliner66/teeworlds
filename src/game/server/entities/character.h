@@ -78,7 +78,7 @@ public:
 
 	// Need for bot (for now)
 	bool CanFire() { return m_ReloadTimer <= 0; }
-	bool botPreFire (int preTime) {return m_ReloadTimer <= preTime;}
+	bool PreCanFire (int preTime) {return m_ReloadTimer <= preTime;}
 	int GetHealth() { return m_Health; }
 	int GetArmor() { return m_Armor; }
 	int GetAmmoCount(int Weapon) { return m_aWeapons[clamp(Weapon, 0,NUM_WEAPONS-1)].m_Ammo; }
