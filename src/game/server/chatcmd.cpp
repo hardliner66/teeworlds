@@ -56,6 +56,8 @@ bool CGameContext::ShowCommand(int ClientID, CPlayer* pPlayer, const char* pMess
 		if(g_Config.m_SvPrivateMessage || AuthLevel)
 		{
 			SendChatTarget(ClientID, "\"/sayto <Name/ID> <Msg>\" Send a private message to a player");
+			SendChatTarget(ClientID, "\"/whisper <Name/ID> <Msg>\" Send a private message to a player");
+			SendChatTarget(ClientID, "\"/w <Name/ID> <Msg>\" Send a private message to a player");
 			SendChatTarget(ClientID, "\"/r <Msg>\" Answer to the player, the last PM came from");
 		}
 
@@ -270,7 +272,7 @@ bool CGameContext::ShowCommand(int ClientID, CPlayer* pPlayer, const char* pMess
 		ShowStats(ClientID, ReceiverID);
 		return false;
 	}
-	else if((Len=StrLeftComp(pMessage, "sayto")) || (Len=StrLeftComp(pMessage, "st")) || (Len=StrLeftComp(pMessage, "pm")))
+	else if((Len=StrLeftComp(pMessage, "sayto")) || (Len=StrLeftComp(pMessage, "st")) || (Len=StrLeftComp(pMessage, "pm")) || (Len=StrLeftComp(pMessage, "whisper") || (Len=StrLeftComp(pMessage, "w"))))
 	{
 		if(!g_Config.m_SvPrivateMessage && !AuthLevel)
 			SendChatTarget(ClientID, "This feature is not available at the moment.");
