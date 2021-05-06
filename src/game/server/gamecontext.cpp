@@ -1944,6 +1944,7 @@ void CGameContext::ConSetDifficulty(IConsole::IResult *pResult, void *pUserData)
 			g_Config.m_SvBotAllowFire = 0;
 			g_Config.m_SvBotReach = 100;
 			g_Config.m_SvBotHookReach = 100;
+			g_Config.m_SvBotDelay = 20;
 		}break;
 		case DIFFICULTY_PEACEFUL_NO_HOOK: {
 			g_Config.m_SvBotAccuracy = 0;
@@ -1952,6 +1953,7 @@ void CGameContext::ConSetDifficulty(IConsole::IResult *pResult, void *pUserData)
 			g_Config.m_SvBotAllowFire = 0;
 			g_Config.m_SvBotReach = 100;
 			g_Config.m_SvBotHookReach = 100;
+			g_Config.m_SvBotDelay = 15;
 		}break;
 		case DIFFICULTY_PEACEFUL: {
 			g_Config.m_SvBotAccuracy = 0;
@@ -1960,6 +1962,7 @@ void CGameContext::ConSetDifficulty(IConsole::IResult *pResult, void *pUserData)
 			g_Config.m_SvBotAllowFire = 0;
 			g_Config.m_SvBotReach = 100;
 			g_Config.m_SvBotHookReach = 100;
+			g_Config.m_SvBotDelay = 15;
 		}break;
 		case DIFFICULTY_EASIEST: {
 			g_Config.m_SvBotAccuracy = 4;
@@ -1968,6 +1971,7 @@ void CGameContext::ConSetDifficulty(IConsole::IResult *pResult, void *pUserData)
 			g_Config.m_SvBotAllowFire = 1;
 			g_Config.m_SvBotReach = 50;
 			g_Config.m_SvBotHookReach = 50;
+			g_Config.m_SvBotDelay = 20;
 		}break;
 		case DIFFICULTY_VERY_EASY: {
 			g_Config.m_SvBotAccuracy = 20;
@@ -1976,6 +1980,7 @@ void CGameContext::ConSetDifficulty(IConsole::IResult *pResult, void *pUserData)
 			g_Config.m_SvBotAllowFire = 1;
 			g_Config.m_SvBotReach = 60;
 			g_Config.m_SvBotHookReach = 60;
+			g_Config.m_SvBotDelay = 20;
 		}break;
 		case DIFFICULTY_EASY: {
 			g_Config.m_SvBotAccuracy = 40;
@@ -1984,6 +1989,7 @@ void CGameContext::ConSetDifficulty(IConsole::IResult *pResult, void *pUserData)
 			g_Config.m_SvBotAllowFire = 1;
 			g_Config.m_SvBotReach = 70;
 			g_Config.m_SvBotHookReach = 70;
+			g_Config.m_SvBotDelay = 15;
 		}break;
 		case DIFFICULTY_MEDIUM: {
 			g_Config.m_SvBotAccuracy = 60;
@@ -1992,6 +1998,7 @@ void CGameContext::ConSetDifficulty(IConsole::IResult *pResult, void *pUserData)
 			g_Config.m_SvBotAllowFire = 1;
 			g_Config.m_SvBotReach = 80;
 			g_Config.m_SvBotHookReach = 80;
+			g_Config.m_SvBotDelay = 10;
 		}break;
 		case DIFFICULTY_HARD: {
 			g_Config.m_SvBotAccuracy = 80;
@@ -2000,6 +2007,7 @@ void CGameContext::ConSetDifficulty(IConsole::IResult *pResult, void *pUserData)
 			g_Config.m_SvBotAllowFire = 1;
 			g_Config.m_SvBotReach = 90;
 			g_Config.m_SvBotHookReach = 90;
+			g_Config.m_SvBotDelay = 7;
 		}break;
 		case DIFFICULTY_VERY_HARD: {
 			g_Config.m_SvBotAccuracy = 95;
@@ -2008,6 +2016,7 @@ void CGameContext::ConSetDifficulty(IConsole::IResult *pResult, void *pUserData)
 			g_Config.m_SvBotAllowFire = 1;
 			g_Config.m_SvBotReach = 95;
 			g_Config.m_SvBotHookReach = 95;
+			g_Config.m_SvBotDelay = 4;
 		}break;
 		case DIFFICULTY_GODLIKE: {
 			g_Config.m_SvBotAccuracy = 100;
@@ -2016,6 +2025,7 @@ void CGameContext::ConSetDifficulty(IConsole::IResult *pResult, void *pUserData)
 			g_Config.m_SvBotAllowFire = 1;
 			g_Config.m_SvBotReach = 100;
 			g_Config.m_SvBotHookReach = 100;
+			g_Config.m_SvBotDelay = 0;
 		}break;
 	}
 }
