@@ -260,8 +260,13 @@ void IGameController::StartRound()
 	m_SuddenDeath = 0;
 	m_GameOverTick = -1;
 	GameServer()->m_World.m_Paused = false;
-	m_aTeamscore[TEAM_RED] = 0;
-	m_aTeamscore[TEAM_BLUE] = 0;
+
+	m_aTeamscore[TEAM_RED] = g_Config.m_SvRedStartPoints;
+	m_aTeamscore[TEAM_BLUE] = g_Config.m_SvBlueStartPoints;
+
+	g_Config.m_SvRedStartPoints = 0;
+	g_Config.m_SvBlueStartPoints = 0;
+
 	m_ForceBalanced = false;
 	Server()->DemoRecorder_HandleAutoStart();
 	char aBuf[256];
