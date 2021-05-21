@@ -103,24 +103,30 @@ bool CGameContext::ShowCommand(int ClientID, CPlayer* pPlayer, const char* pMess
 			if(g_Config.m_SvStopGoFeature)
 			{
 				int maxStops = g_Config.m_SvMaxStopRequestsPerTeam;
-				if (maxStops && m_pController->m_StopsTaken[team] < maxStops) {
-					if(!m_World.m_Paused)
-					{
-						m_pController->m_StopsTaken[team]++;
-						int stopsTaken = m_pController->m_StopsTaken[team];
-						m_World.m_Paused = true;
-						if (maxStops) {
+				if (maxStops) {
+					if (m_pController->m_StopsTaken[team] < maxStops) {
+						if(!m_World.m_Paused)
+						{
+							m_pController->m_StopsTaken[team]++;
+							int stopsTaken = m_pController->m_StopsTaken[team];
+							m_World.m_Paused = true;
+
 							const char* team_name = team == TEAM_RED ? "Red" : "Blue";
 							char aBuf[128];
 							str_format(aBuf, sizeof(aBuf), "%s team called for timeout (%d/%d).", team_name, stopsTaken, maxStops);
 							SendChat(-1, CHAT_ALL, aBuf);
-						} else {
-							SendChat(-1, CHAT_ALL, "Game paused.");
 						}
+						m_pController->m_FakeWarmup = 0;
+					} else {
+						SendChatTarget(ClientID, "Your team has no more stops left!");
+					}
+				} else {
+					if(!m_World.m_Paused)
+					{
+						m_World.m_Paused = true;
+						SendChat(-1, CHAT_ALL, "Game paused.");
 					}
 					m_pController->m_FakeWarmup = 0;
-				} else {
-					SendChatTarget(ClientID, "Your team has no more stops left!");
 				}
 			}
 			else
