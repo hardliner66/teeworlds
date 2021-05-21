@@ -438,6 +438,8 @@ void IGameController::OnCharacterSpawn(class CCharacter *pChr)
 
 void IGameController::DoWarmup(int Seconds)
 {
+	m_StopsTaken[TEAM_RED] = 0;
+	m_StopsTaken[TEAM_BLUE] = 0;
 	if(Seconds < 0)
 		m_Warmup = 0;
 	else
