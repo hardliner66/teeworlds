@@ -37,14 +37,29 @@ int CEntity::NetworkClipped(int SnappingClient, vec2 CheckPos)
 {
 	if(SnappingClient == -1)
 		return 0;
+	CPlayer *player = GameServer()->m_apPlayers[SnappingClient];
+	if (player->GetCharacter())
+		if(player->GetCharacter()->dieCounter != -1)
+			return 1;
+	int ticksLatency = player->m_Latency.m_Avg;
+	vec2 viewPos = player->m_ViewPos;
+	vec2 predViewPos = viewPos;
+	if (player->GetCharacter())
+		predViewPos = viewPos + player->GetCharacter()->m_Core.m_Vel * vec2(ticksLatency, ticksLatency);
+	float dx = viewPos.x;
+	dx-=CheckPos.x;
+	float dy = viewPos.y;
+	dy-=CheckPos.y;
 
-	float dx = GameServer()->m_apPlayers[SnappingClient]->m_ViewPos.x-CheckPos.x;
-	float dy = GameServer()->m_apPlayers[SnappingClient]->m_ViewPos.y-CheckPos.y;
+	float pdx = predViewPos.x;
+	pdx-=CheckPos.x;
+	float pdy = predViewPos.y;
+	pdy-=CheckPos.y;
 
-	if(absolute(dx) > 1000.0f || absolute(dy) > 800.0f)
+	if((absolute(dx) > 1000.0f || absolute(dy) > 800.0f) && (absolute(pdx) > 1000.0f || absolute(pdy) > 800.0f))
 		return 1;
 
-	if(distance(GameServer()->m_apPlayers[SnappingClient]->m_ViewPos, CheckPos) > 1100.0f)
+	if((distance(viewPos, CheckPos) > 1100.0f) && (distance(predViewPos, CheckPos) > 1100.0f))
 		return 1;
 	return 0;
 }
