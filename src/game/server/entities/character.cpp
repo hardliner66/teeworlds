@@ -994,7 +994,8 @@ bool CCharacter::TakeDamage(vec2 Force, int Dmg, int From, int Weapon)
 
 void CCharacter::Snap(int SnappingClient)
 {
-	if(NetworkClipped(SnappingClient))
+	int latency = m_pPlayer->m_Latency.m_Avg;
+	if(NetworkClipped(SnappingClient, m_Pos + vec2(latency,latency) * m_Core.m_Vel) && NetworkClipped(SnappingClient, m_Pos))
 		return;
 
 	if(g_Config.m_SvSpawnprotection && m_SpawnProtectTick >= Server()->Tick() && m_pPlayer->GetCID() != SnappingClient)
