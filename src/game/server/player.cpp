@@ -293,17 +293,6 @@ void CPlayer::SetTeam(int Team, bool DoChatMsg)
 	if(m_Team == Team)
 		return;
 
-
-	int amountPlayers = 0;
-	for(int i = 0; i < MAX_CLIENTS; i++)
-		if(GameServer()->m_apPlayers[i] && GameServer()->m_apPlayers[i]->GetCharacter())
-			amountPlayers++;
-
-
-	if(GameServer()->m_pController->GetRoundTick() < 200 && Team != TEAM_SPECTATORS && !amountPlayers)
-	{
-		return;
-	}
 	char aBuf[512];
 	if(DoChatMsg)
 	{

@@ -158,17 +158,6 @@ void CGameContext::CreateExplosion(vec2 Pos, int Owner, int Weapon, bool NoDamag
 	}
 }
 
-void CGameContext::CreateEmptyExplosion(vec2 Pos)
-{
-	// create the event
-	CNetEvent_Explosion *pEvent = (CNetEvent_Explosion *)m_Events.Create(NETEVENTTYPE_EXPLOSION, sizeof(CNetEvent_Explosion));
-	if(pEvent)
-	{
-		pEvent->m_X = (int)Pos.x;
-		pEvent->m_Y = (int)Pos.y;
-	}
-}
-
 /*
 void create_smoke(vec2 Pos)
 {

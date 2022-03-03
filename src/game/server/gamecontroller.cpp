@@ -65,13 +65,8 @@ float IGameController::EvaluateSpawnPos(CSpawnEval *pEval, vec2 Pos)
 void IGameController::EvaluateSpawnType(CSpawnEval *pEval, int Type)
 {
 	// get spawn point
-	if(!m_aNumSpawnPoints[Type])
-		return;
-	int random = rand() % m_aNumSpawnPoints[Type];
-	for(int j = 0; j < m_aNumSpawnPoints[Type]; j++)
+	for(int i = 0; i < m_aNumSpawnPoints[Type]; i++)
 	{
-		int i = (j + random) % m_aNumSpawnPoints[Type];
-		// int i = j;
 		// check if the position is occupado
 		CCharacter *aEnts[MAX_CLIENTS];
 		int Num = GameServer()->m_World.FindEntities(m_aaSpawnPoints[Type][i], 64, (CEntity**)aEnts, MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER);
@@ -242,7 +237,6 @@ void IGameController::StartRound()
 			pPlayer->m_Spree = 0;
 
 			const int team = pPlayer->GetTeam();
-			
 
 			if (g_Config.m_SvBotsEnabled && g_Config.m_SvBotVsHuman && (team != TEAM_SPECTATORS)) {
 				if (m_PlayerTeamRed) {
@@ -397,9 +391,6 @@ void IGameController::OnPlayerInfoChange(class CPlayer *pP)
 	}
 }
 
-int IGameController::GetRoundTick()
-{return Server()->Tick()-m_RoundStartTick;}
-
 
 int IGameController::OnCharacterDeath(class CCharacter *pVictim, class CPlayer *pKiller, int Weapon)
 {
@@ -409,7 +400,6 @@ int IGameController::OnCharacterDeath(class CCharacter *pVictim, class CPlayer *
 	if(pKiller == pVictim->GetPlayer())
 	{
 		pVictim->GetPlayer()->m_Score--; // suicide
-		pVictim->GetPlayer()->m_RespawnTick = Server()->Tick()+Server()->TickSpeed()*999.0f;
 		if(g_Config.m_SvLoltextShow)
 			GameServer()->CreateLolText(pKiller->GetCharacter(), "-1");
 	}
@@ -418,24 +408,18 @@ int IGameController::OnCharacterDeath(class CCharacter *pVictim, class CPlayer *
 		if(IsTeamplay() && pVictim->GetPlayer()->GetTeam() == pKiller->GetTeam())
 		{
 			pKiller->m_Score--; // teamkill
-			pVictim->GetPlayer()->m_RespawnTick = Server()->Tick()+Server()->TickSpeed()*999.0f;
 			if(g_Config.m_SvLoltextShow)
 				GameServer()->CreateLolText(pKiller->GetCharacter(), "-1");
 		}
 		else
 		{
 			pKiller->m_Score++; // normal kill
-			pVictim->GetPlayer()->m_RespawnTick = Server()->Tick()+Server()->TickSpeed()*999.0f;
 			if(g_Config.m_SvLoltextShow)
 				GameServer()->CreateLolText(pKiller->GetCharacter(), "+1");
 		}
 	}
-	//if(Weapon == WEAPON_SELF)
-		//pVictim->GetPlayer()->m_RespawnTick = Server()->Tick()+Server()->TickSpeed()*999.0f;
-	//pVictim->GetPlayer()->SetTeam(TEAM_SPECTATORS, false);
-	// if(pKiller != pVictim->GetPlayer() && pKiller)
-		// pVictim->GetPlayer()->m_SpectatorID = pKiller->GetCID();
-		
+	if(Weapon == WEAPON_SELF)
+		pVictim->GetPlayer()->m_RespawnTick = Server()->Tick()+Server()->TickSpeed()*3.0f;
 	return 0;
 }
 
