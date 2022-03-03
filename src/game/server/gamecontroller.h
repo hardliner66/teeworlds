@@ -12,8 +12,7 @@
 */
 class IGameController
 {
-	vec2 m_aaSpawnPoints[3][64];
-	int m_aNumSpawnPoints[3];
+	
 
 	class CGameContext *m_pGameServer;
 	class IServer *m_pServer;
@@ -61,6 +60,10 @@ protected:
 	bool m_ForceBalanced;
 
 public:
+
+	vec2 m_aaSpawnPoints[3][64];
+	int m_aNumSpawnPoints[3];
+	int GetRoundTick();
 	const char *m_pGameType;
 
 	bool m_PlayerTeamRed;

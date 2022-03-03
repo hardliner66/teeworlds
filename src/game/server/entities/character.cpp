@@ -830,7 +830,7 @@ void CCharacter::Die(int Killer, int Weapon)
 	// we got to wait 0.5 secs before respawning
 	m_pPlayer->m_RespawnTick = Server()->Tick()+Server()->TickSpeed()/2;
 	int ModeSpecial = GameServer()->m_pController->OnCharacterDeath(this, GameServer()->m_apPlayers[Killer], Weapon);
-	GameServer()->m_pBotEngine->OnCharacterDeath(m_pPlayer->GetCID(),Killer, Weapon);
+	//GameServer()->m_pBotEngine->OnCharacterDeath(m_pPlayer->GetCID(),Killer, Weapon);
 
 	char aBuf[256];
 	str_format(aBuf, sizeof(aBuf), "kill killer='%d:%s' victim='%d:%s' weapon=%d special=%d",
@@ -876,12 +876,14 @@ void CCharacter::Die(int Killer, int Weapon)
 bool CCharacter::TakeDamage(vec2 Force, int Dmg, int From, int Weapon)
 {
 	m_Core.m_Vel += Force;
+	if(From != -1)
+	{
+		if(GameServer()->m_pController->IsFriendlyFire(m_pPlayer->GetCID(), From) && !g_Config.m_SvTeamdamage)
+			return false;
 
-	if(GameServer()->m_pController->IsFriendlyFire(m_pPlayer->GetCID(), From) && !g_Config.m_SvTeamdamage)
-		return false;
-
-	if(m_SpawnProtectTick > Server()->Tick() || (GameServer()->GetPlayerChar(From) && GameServer()->GetPlayerChar(From)->Spawnprotected()))
-		return false;
+		if(m_SpawnProtectTick > Server()->Tick() || (GameServer()->GetPlayerChar(From) && GameServer()->GetPlayerChar(From)->Spawnprotected()))
+			return false;
+	}
 
 	/* TW+ */
 	if(GameServer()->m_pController->IsInstagib())
@@ -965,7 +967,31 @@ bool CCharacter::TakeDamage(vec2 Force, int Dmg, int From, int Weapon)
 	// check for death
 	if(m_Health <= 0)
 	{
-		Die(From, Weapon);
+		//Die(From, Weapon);
+		// send the kill message
+		if(From > 0)
+		{
+			CNetMsg_Sv_KillMsg Msg;
+			Msg.m_Killer = From;
+			Msg.m_Victim = m_pPlayer->GetCID();
+			Msg.m_Weapon = Weapon;
+			Msg.m_ModeSpecial = GameServer()->m_pController->OnCharacterDeath(this, GameServer()->m_apPlayers[From], Weapon);
+			Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, -1);
+
+			
+
+			char aBuf[256];
+			str_format(aBuf, sizeof(aBuf), "kill killer='%d:%s' victim='%d:%s' weapon=%d special=%d",
+				From, Server()->ClientName(From),
+				m_pPlayer->GetCID(), Server()->ClientName(m_pPlayer->GetCID()), Weapon, 0);
+			GameServer()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "game", aBuf);
+
+			if(GameServer()->m_apPlayers[From] && From != m_pPlayer->GetCID())
+			GameServer()->m_apPlayers[From]->m_Stats.m_Kills++;
+		}
+
+		// a nice sound
+		GameServer()->CreateSound(m_Pos, SOUND_PLAYER_DIE);
 
 		// set attacker's face to happy (taunt!)
 		if (From >= 0 && From != m_pPlayer->GetCID() && GameServer()->m_apPlayers[From])
@@ -977,7 +1003,10 @@ bool CCharacter::TakeDamage(vec2 Force, int Dmg, int From, int Weapon)
 				pChr->m_EmoteStop = Server()->Tick() + Server()->TickSpeed();
 			}
 		}
-
+		if(From >= 0)
+			GetPlayer()->m_SpectatorID = From;
+		GetPlayer()->SetTeam(TEAM_SPECTATORS, false);
+		
 		return false;
 	}
 
